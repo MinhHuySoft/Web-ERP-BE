@@ -19,12 +19,12 @@ CREATE TABLE dbo.SY_Menu (
 CREATE TABLE dbo.SY_UserGroupPermisstion (
   ID varchar(50) NOT NULL PRIMARY KEY DEFAULT CONVERT(varchar(50), NEWID()), UserGroupID varchar(20) NOT NULL, MenuID varchar(50) NOT NULL,
   IsRun bit NOT NULL DEFAULT 0, IsAdd bit NOT NULL DEFAULT 0, IsUpdate bit NOT NULL DEFAULT 0, IsDelete bit NOT NULL DEFAULT 0,
-  isManager bit NULL, isAdmin bit NOT NULL DEFAULT 0);
+  isManager bit NULL, isAdmin bit NOT NULL DEFAULT 0, isHideAmount bit NULL, isExportExcel bit NULL);
 
 CREATE TABLE dbo.SY_UserPermisstion (
   ID varchar(50) NOT NULL PRIMARY KEY DEFAULT CONVERT(varchar(50), NEWID()), UserName varchar(100) NOT NULL, MenuID varchar(50) NOT NULL,
   IsRun bit NOT NULL DEFAULT 0, IsAdd bit NOT NULL DEFAULT 0, IsUpdate bit NOT NULL DEFAULT 0, IsDelete bit NOT NULL DEFAULT 0,
-  isManager bit NULL, isAdmin bit NOT NULL DEFAULT 0);
+  isManager bit NULL, isAdmin bit NOT NULL DEFAULT 0, isHideAmount bit NULL, isExportExcel bit NULL);
 GO
 
 -- Giản lược §5.2: Admin thấy mọi menu bật; người khác thấy mục IsRun=1 (nhóm, riêng, của người ủy quyền) + mục không cần quyền,
@@ -64,3 +64,95 @@ INSERT dbo.SY_Menu (MenuID,VN,EN,MenuType,FormName,Parent,isBeginGroup,isDisable
 
 INSERT dbo.SY_UserGroupPermisstion (UserGroupID,MenuID,IsRun) VALUES ('KT','0901',1),('KT','0902',1),('KT','0930',1),('KT','1601',0),('KHO','1601',1);
 INSERT dbo.SY_UserPermisstion (UserName,MenuID,IsRun) VALUES ('ketoan','0101',1);
+
+-- ---------------------------------------------------------------------------------------------------------------------
+-- Metadata form (M2/M3): cột lấy đúng tên/kiểu như MedData (đã kiểm 2026-11-12), chỉ phần BE đọc. Cấu hình form
+-- "Đề nghị mua hàng" rút gọn từ cấu hình thật; dữ liệu nghiệp vụ là dữ liệu GIẢ.
+CREATE TABLE dbo.SY_FrmLstTbl (
+  FormID varchar(100) NOT NULL PRIMARY KEY, FormType varchar(50) NULL, CaptionVN nvarchar(100) NULL, CaptionEN nvarchar(100) NULL,
+  TableName varchar(100) NULL, PrimaryKey varchar(100) NULL, HideColumnArr varchar(max) NULL, SummaryColumnArr varchar(200) NULL,
+  FilterEx nvarchar(50) NULL, TableDetailLeftJoinField varchar(100) NULL, TableDetailSelectFrom varchar(500) NULL);
+
+CREATE TABLE dbo.SY_FrmCfg (
+  UserAutoID varchar(50) NOT NULL PRIMARY KEY, FID varchar(250) NULL, KeyID varchar(50) NULL, SubID varchar(50) NULL,
+  KeyValue nvarchar(max) NULL, SubValue nvarchar(max) NULL, VDate datetime NULL, PFID varchar(250) NULL);
+
+CREATE TABLE dbo.SY_FrmFltTbl (
+  UserAutoID varchar(40) NOT NULL PRIMARY KEY, FormID varchar(250) NULL, KeyID varchar(50) NULL, ColumnID varchar(50) NULL,
+  Caption nvarchar(150) NULL, Type int NULL, Source nvarchar(max) NULL, ValueColumn varchar(50) NULL, DisplayColumn varchar(50) NULL,
+  Operator int NULL, WhereString nvarchar(250) NULL, DefaultValue nvarchar(100) NULL, IsDisable bit NULL);
+
+CREATE TABLE dbo.SY_FmatTbl (
+  FormatID varchar(2) NOT NULL PRIMARY KEY, FormatName nvarchar(50) NULL, NumberDecimal int NULL, FormatString nvarchar(100) NULL, Type char(1) NULL);
+
+CREATE TABLE dbo.SY_FmtFldTbl (
+  AutoID numeric(18,0) IDENTITY PRIMARY KEY, FormatID varchar(2) NULL, FieldName varchar(50) NULL, FormName varchar(100) NULL,
+  CaptionVN nvarchar(200) NULL);
+
+CREATE TABLE dbo.CF_BranchTbl (BranchID varchar(20) NOT NULL PRIMARY KEY, BranchName nvarchar(100) NULL);
+CREATE TABLE dbo.CF_ItemTbl (ItemID varchar(30) NOT NULL PRIMARY KEY, ItemName nvarchar(200) NULL, Unit nvarchar(20) NULL);
+CREATE TABLE dbo.AP_PurchaseRequestTbl (
+  PurchaseRequestID varchar(30) NOT NULL PRIMARY KEY, PurchaseDate datetime NULL, StatusID int NULL, BranchID varchar(20) NULL,
+  Notes nvarchar(500) NULL, Price decimal(18,2) NULL, RateExchange decimal(18,4) NULL, isLock bit NULL, UserCreate varchar(100) NULL);
+CREATE TABLE dbo.AP_PurchaseRequestDetailTbl (
+  UserAutoID varchar(50) NOT NULL PRIMARY KEY, PurchaseRequestID varchar(30) NULL, ItemID varchar(30) NULL, Quantity decimal(18,2) NULL,
+  UnitPrice decimal(18,2) NULL);
+-- Kiểm lớp bảo vệ chỉ đọc: nếu một đoạn SQL metadata ghi được thì số dòng ở đây đổi.
+CREATE TABLE dbo.WEB_Canary (ID int NOT NULL PRIMARY KEY);
+GO
+
+INSERT dbo.SY_Menu (MenuID,VN,EN,MenuType,FormName,Parent,isBeginGroup,isDisable,isBold,isNotCheckPermission,Para) VALUES
+ ('05',N'Mua hàng','Purchase',1,NULL,NULL,0,0,0,0,NULL),
+ ('05011',N'Đề nghị mua hàng','Purchase request',0,'AP_PurposeRequestListFrm','05',0,0,0,0,NULL),
+ ('05090',N'Chi nhánh','Branches',0,'CF_BranchListFrm','05',0,0,0,0,NULL),
+ ('05099',N'Form cấu hình xấu','Bad form',0,'BAD_ConfigFrm','05',0,0,0,0,NULL);
+INSERT dbo.SY_UserGroupPermisstion (UserGroupID,MenuID,IsRun,IsAdd) VALUES ('KT','05011',1,1),('KT','05090',1,0),('KT','05099',1,0);
+INSERT dbo.SY_UserPermisstion (UserName,MenuID,IsRun,isAdmin) VALUES ('Admin','05011',1,1);
+INSERT dbo.SY_UserPermisstion (UserName,MenuID,IsRun,isHideAmount) VALUES ('ketoan','05011',1,1);
+
+INSERT dbo.SY_FrmLstTbl (FormID,FormType,CaptionVN,TableName,PrimaryKey) VALUES
+ ('AP_PurposeRequestListFrm','EDIT',N'Đề nghị mua hàng','AP_PurchaseRequestTbl','PurchaseRequestID'),
+ ('CF_BranchListFrm','LIST',N'Chi nhánh','CF_BranchTbl','BranchID'),
+ ('BAD_ConfigFrm','LIST',N'Form cấu hình xấu','AP_PurchaseRequestTbl','PurchaseRequestID');
+
+INSERT dbo.SY_FrmCfg (UserAutoID,FID,KeyID,SubID,KeyValue,SubValue) VALUES
+ ('c01','AP_PurposeRequestListFrm','SP','','13',NULL), ('c02','AP_PurposeRequestListFrm','SPA','','30',NULL),
+ ('c03','AP_PurposeRequestListFrm','DFP','','PurchaseDate',NULL),
+ ('c10','AP_PurposeRequestListFrm','T0','TN','AP_PurchaseRequestTbl',NULL), ('c11','AP_PurposeRequestListFrm','T0','PK','PurchaseRequestID',NULL),
+ ('c12','AP_PurposeRequestListFrm','T0','GD2','PurchaseRequestID;PurchaseDate;StatusID',NULL),
+ ('c13','AP_PurposeRequestListFrm','T0','HDE','RateExchange',NULL), ('c14','AP_PurposeRequestListFrm','T0','SO','PurchaseRequestID Desc',NULL),
+ ('c15','AP_PurposeRequestListFrm','T0','SUM','Price',NULL), ('c16','AP_PurposeRequestListFrm','T0','ACP','Price',NULL),
+ ('c20','AP_PurposeRequestListFrm','T1','TN','AP_PurchaseRequestDetailTbl',NULL), ('c21','AP_PurposeRequestListFrm','T1','PK','UserAutoID',NULL),
+ ('c22','AP_PurposeRequestListFrm','T1','TN1','CF_ItemTbl',NULL), ('c23','AP_PurposeRequestListFrm','T1','FKA1','ItemID',NULL),
+ ('c24','AP_PurposeRequestListFrm','T1','FKB1','ItemID',NULL), ('c25','AP_PurposeRequestListFrm','T1','SE1','A.ItemName, A.Unit',NULL),
+ ('c26','AP_PurposeRequestListFrm','T1','GD2','ItemID;ItemName;Unit;Quantity',NULL), ('c27','AP_PurposeRequestListFrm','T1','SUM','Quantity',NULL),
+ ('c28','AP_PurposeRequestListFrm','T1','DCP',N'Hàng hóa đề nghị',NULL),
+ ('c30','AP_PurposeRequestListFrm','F0','PurchaseDate',N'Ngày đề nghị','CV'),
+ ('c40','AP_PurposeRequestListFrm','LYT1','PurchaseRequestID','1;4;1;1;;;;;;;;;;;;;;;;0;0','001'),
+ ('c41','AP_PurposeRequestListFrm','LYT1','PurchaseDate','4;4;1;;;;;;;;;;;;;;;;;0;0','002'),
+ ('c42','AP_PurposeRequestListFrm','LYT1','CommandButtonCtl','22;4;1;;;;;;;;;;;;;;;;;0;0','003'),
+ ('c43','AP_PurposeRequestListFrm','LYT1','Notes','1;99;2;1;;;;;;;;;;;;;;;;0;0','004'),
+ ('c44','AP_PurposeRequestListFrm','LYT1','Price','5;8;1;1;;;;;;;;;;;;;;;;0;0','005'),
+ ('c45','AP_PurposeRequestListFrm','LYT1','RateExchange','5;8;1;;;;;;;;;;;;;;;;1;0;0','006'),
+ -- Hook và nút lệnh có ghi DB: web chỉ đọc nên KHÔNG được chạy (test kiểm WEB_Canary không đổi).
+ ('c50','AP_PurposeRequestListFrm','ESL','','DELETE dbo.WEB_Canary',NULL),
+ ('c90','BAD_ConfigFrm','T0','TN','AP_PurchaseRequestTbl',NULL), ('c91','BAD_ConfigFrm','T0','PK','PurchaseRequestID',NULL),
+ ('c92','BAD_ConfigFrm','T0','FTX','1=1; DELETE dbo.WEB_Canary',NULL);
+
+INSERT dbo.SY_FrmFltTbl (UserAutoID,FormID,KeyID,ColumnID,Type,Source,DefaultValue,IsDisable) VALUES
+ ('f01','AP_PurposeRequestListFrm','001','BranchID',3,'Select * from CF_BranchTbl','{BranchID}',0);
+
+INSERT dbo.SY_FmatTbl (FormatID,FormatName,NumberDecimal,FormatString,Type) VALUES ('B','BaseAmount',0,'#,##0','N'),('Q2','Quantity2',2,'#,##0.##','N');
+INSERT dbo.SY_FmtFldTbl (FormatID,FieldName,FormName,CaptionVN) VALUES
+ (NULL,'PurchaseRequestID',NULL,N'Mã đề xuất'),('B','Price',NULL,N'Giá'),('Q2','Quantity',NULL,N'Số lượng'),(NULL,'BranchID',NULL,N'Chi nhánh'),
+ (NULL,'ItemName',NULL,N'Tên hàng');
+
+INSERT dbo.CF_BranchTbl VALUES ('HN',N'Hà Nội'),('HCM',N'Hồ Chí Minh');
+INSERT dbo.CF_ItemTbl VALUES ('VT01',N'Vật tư một',N'Cái'),('VT02',N'Vật tư hai',N'Hộp');
+INSERT dbo.AP_PurchaseRequestTbl (PurchaseRequestID,PurchaseDate,StatusID,BranchID,Notes,Price,RateExchange,isLock,UserCreate) VALUES
+ ('PO/001',DATEADD(day,-3,CAST(GETDATE() AS date)),1,'HN',N'Đề nghị một',1000,1,0,'ketoan'),
+ ('PO/002',DATEADD(day,-5,CAST(GETDATE() AS date)),2,'HCM',N'Đề nghị hai',2000,1,0,'ketoan'),
+ ('PO/003',DATEADD(day,-60,CAST(GETDATE() AS date)),3,'HN',N'Đề nghị cũ',3000,1,1,'ketoan'),
+ ('PO/004',DATEADD(day,-1,CAST(GETDATE() AS date)),1,'HN',N'Của người khác',4000,1,0,'khac');
+INSERT dbo.AP_PurchaseRequestDetailTbl VALUES ('d1','PO/001','VT01',2,100),('d2','PO/001','VT02',3.5,200),('d3','PO/004','VT01',1,100);
+INSERT dbo.WEB_Canary VALUES (1);

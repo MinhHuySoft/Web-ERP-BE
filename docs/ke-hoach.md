@@ -17,8 +17,8 @@
 |---|---|---|---|
 | **M0** | Repo, solution 6 project, CI build + test, quy tắc (`AGENTS.md`, `.gitignore`) | Không | Xong 2026-11-12 |
 | **M1** | Vỏ chạy được: cấu hình SQLite + CLI quản trị, nhận diện công ty theo domain, đăng nhập tài khoản ERP, cookie, `session`, `menu`, `home`, màn chưa hỗ trợ, `/health`, contract test, CD qua runner trên VPS | Không | Xong 2026-11-12 (chờ chạy thử trên VPS) |
-| M2 | Màn danh sách chỉ đọc: biên dịch metadata `SY_FrmLstTbl` / `SY_FrmCfg` (GD2, HDE, LYT), lọc, lưới, tra cứu F4. Pilot `CS_ReceiptFrm` | Không | Chưa |
-| M3 | Xem chứng từ (`EDIT` `data-mode="view"`), tab chi tiết nạp lười, quyền form (`GetPermission`), ẩn cột tiền | Không | Chưa |
+| M2 | Màn danh sách chỉ đọc: biên dịch metadata `SY_FrmLstTbl` / `SY_FrmCfg` (GD2, HDE, LYT), lọc, lưới, tra cứu F4. Pilot `AP_PurposeRequestListFrm` (`CS_ReceiptFrm` là form viết tay, không có metadata) | Không | Phần chính xong 2026-11-12 (123/127 form metadata của Medcom); còn F4, tên thay mã, phân trang |
+| M3 | Xem chứng từ (`EDIT` `data-mode="view"`), tab chi tiết nạp lười, quyền form (`GetPermission`), ẩn cột tiền | Không | Phần chính xong 2026-11-12; còn tab Định khoản/VAT của form viết tay, in (M6) |
 | M4 | Ghi: migration schema `web`, `SavePipeline` (journal `__idem`, `isLock`, khóa sổ, `DateUpdate` → 409, số chứng từ, `UserAutoID`, XML hook, `Msg/MsgType`), `SY_UserLog`, mã công ty trong form | **Có** | Chưa; cần CQ-01 |
 | M5 | Trang quản trị trên web (TOTP), chế độ bảo trì, đăng xuất cả công ty từ web, hằng mật khẩu ERP đặt trên web | Không | Xong phần chính 2026-11-12; còn thu hồi phiên theo từng user (cần schema `web`, M4) |
 | M6 | Báo cáo (`*ReportStp`), xuất Excel, đính kèm có kiểm quyền | Không | Chưa |
@@ -62,3 +62,49 @@ Xem [deploy/README.md](../deploy/README.md). Tóm tắt:
 4. Chạy `WebErp.Admin.exe init`, rồi `tenant add` cho công ty đầu tiên.
 5. Cài GitHub runner tự host (nhãn `weberp-vps`) và chỉnh cài đặt Actions an toàn cho repo công khai.
 6. Push lên `main` → CI đóng gói → Deploy tự cập nhật và khởi động lại BE.
+
+## M2 + M3 — chi tiết (2026-11-12)
+
+**Đã làm:**
+
+- [x] Đọc metadata form lúc chạy, cache 5 phút theo công ty (`Erp/Metadata`). Cột đã kiểm trên MedData.
+  - Bảng đọc: `SY_FrmLstTbl`, `SY_FrmCfg`, `SY_FrmFltTbl`, `SY_FmtFldTbl`, `SY_FmatTbl`.
+  - Slot `T0…TJ`: TN/TV/PK/SE/EX, join 1–4, SO/SDD/TRS, FTR/FTX/FTXS, MUL/MDL, GD2, HDE/HDE2/HDE3, ACP, SUM, DCP.
+  - Form LIST không có T0 lấy bảng từ `SY_FrmLstTbl`.
+- [x] Câu SELECT dựng như `TableInfoX` (tài liệu 10 §4.5), nhưng:
+  - token `{User}`, `{BranchID}`, `{Module}_Setup`, cột `SY_User`… thành **tham số SQL**, không nối chuỗi (QĐ-03, ngoại lệ 2);
+  - đoạn SQL của metadata có lệnh ghi, `;`, `exec`… bị từ chối, màn báo "cấu hình chưa hỗ trợ";
+  - mọi câu chạy trong **giao dịch luôn rollback**;
+  - không chạy hook (ESL, EBS…) và nút lệnh.
+- [x] Lọc:
+  - khoảng ngày theo `SP`/`SPA`/`DFP`;
+  - ô lọc `SY_FrmFltTbl`: text, ngày, số, combo (nguồn SQL, tối đa 500 dòng), checkbox;
+  - tìm nhanh trên khóa + cột GD2.
+- [x] Lọc ngầm như WinForms: chứng từ của chính mình nếu không phải Manager/Admin (`SPA2`), chi nhánh của người dùng (`SPA3`), FTR/FTX, chỉ có quyền Thêm thì không thấy gì. Màn xem chứng từ áp cùng lọc nên không mở được chứng từ của người khác bằng URL.
+- [x] Quyền form như `GetPermission` (nhóm ∪ riêng, dòng đầu theo MenuID). **Fail-closed:** không có dòng quyền thì chỉ xem, chỉ thấy chứng từ của mình. HDE2/HDE3/ACP (khi ẩn tiền) bị **loại khỏi dữ liệu**, không chỉ ẩn.
+- [x] Lưới:
+  - danh sách tối đa 1.000 dòng, kèm tổng số dòng và tổng cột (SUM) trên toàn bộ dữ liệu khớp lọc;
+  - tiêu đề cột lấy theo F0 → `SY_FmtFldTbl` → tên cột;
+  - kiểu và số lẻ lấy theo `SY_FmatTbl`.
+- [x] Xem chứng từ (form EDIT):
+  - ô theo `LYT` các tab 1/2/3/A/B/C (bỏ nút, ô ẩn, ô chỉ Manager/Admin);
+  - tab chi tiết T1… nạp lười (`/tabs/T1`), theo TPV.
+- [x] 49 form viết tay (tài liệu 30) và báo cáo: vẫn là màn "chưa có trên web".
+- [x] Test:
+  - unit: `SqlTemplate`, `MetadataCompiler`;
+  - Host: route, khóa có `/`;
+  - contract: 3 kiểu trang mới;
+  - integration: LocalDB với metadata rút gọn từ MedData (lọc ngầm, ẩn tiền, form ghi DB bị chặn, bảng canary không đổi).
+- [x] Chạy thử trên bản sao MedData (máy dev, chỉ đọc), cả 127 form metadata trong menu:
+  - 123 mở được, 4 là form viết tay;
+  - 28 chứng từ và 53 tab chi tiết mở được;
+  - validator FE: 0 lỗi, 0 cảnh báo.
+  
+  Test `RealTenantSmokeTests` chỉ chạy khi đặt biến `WEBERP_REAL_*`.
+
+**Còn lại:**
+
+- Tra cứu F4 và hiện **tên thay mã** (trạng thái, khách hàng…) theo `SY_FrmDrdwTbl`.
+- Phân trang trên server (FE chưa hỗ trợ `pager`), lưu bố cục lưới (`web.GridLayout`, M4).
+- Ô lọc kiểu khác (kỳ 9, quý 14, UserFilterCombo 18…), `CostCenterID` của người dùng, ủy quyền `SY_UserAuthority` (MedData không có bảng).
+- Form viết tay (Phiếu thu/chi, Mua hàng…): viết riêng từng form.

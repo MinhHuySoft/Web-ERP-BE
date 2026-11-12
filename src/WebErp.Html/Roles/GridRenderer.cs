@@ -2,8 +2,12 @@ using System.Globalization;
 
 namespace WebErp.Html.Roles;
 
-/// <param name="Type"><c>text</c>, <c>number</c>, <c>money</c>, <c>date</c>, <c>datetime</c>, <c>bool</c>, <c>link</c>, <c>status</c>.</param>
-public sealed record GridColumn(string Field, string Title, string Type = "text", int? Width = null, bool Frozen = false, bool Wrap = false);
+/// <param name="Type"><c>text</c>, <c>number</c>, <c>money</c>, <c>quantity</c>, <c>percent</c>, <c>date</c>, <c>datetime</c>, <c>bool</c>,
+/// <c>link</c>, <c>status</c>.</param>
+/// <param name="Hidden">Ẩn mặc định nhưng người dùng bật lại được. Cột ẩn vì quyền thì KHÔNG đưa vào lưới (chuẩn 11, quy tắc quyền).</param>
+/// <param name="Sum"><c>sum</c> / <c>count</c> / … : cột có dòng tổng.</param>
+public sealed record GridColumn(string Field, string Title, string Type = "text", int? Width = null, bool Frozen = false, bool Wrap = false,
+    int? Decimals = null, bool Hidden = false, string? Sum = null);
 
 /// <summary>Một ô. <see cref="Value"/>: giá trị máy bất biến (chuẩn 2.5). <see cref="Href"/>: ô là link mở chi tiết.</summary>
 /// <param name="StatusTone">Có giá trị thì ô là <c>data[data-erp=status]</c>: success / warning / danger / info / muted.</param>
@@ -26,7 +30,10 @@ public sealed record GridModel(
     string? KeyField = null,
     string? Caption = null,
     string Selectable = "none",
-    string? Sort = null);
+    string? Sort = null,
+    int? TotalRows = null,
+    IReadOnlyDictionary<string, GridCell>? Totals = null,
+    string? FooterLabel = null);
 
 /// <summary><c>table[data-erp=grid]</c> (chuẩn 11). Mỗi dòng đúng số ô bằng số cột.</summary>
 public static class GridRenderer
@@ -34,13 +41,14 @@ public static class GridRenderer
     public static void Write(HtmlWriter w, GridModel g)
     {
         w.Open("table", ("data-erp", "grid"), ("data-grid-id", g.GridId), ("data-key-field", g.KeyField),
-            ("data-selectable", g.Selectable), ("data-total-rows", g.Rows.Count.ToString(CultureInfo.InvariantCulture)), ("data-sort", g.Sort)).Line();
+            ("data-selectable", g.Selectable), ("data-total-rows", (g.TotalRows ?? g.Rows.Count).ToString(CultureInfo.InvariantCulture)), ("data-sort", g.Sort)).Line();
         if (!string.IsNullOrEmpty(g.Caption)) w.Element("caption", g.Caption).Line();
         w.Open("thead").Open("tr");
         foreach (var c in g.Columns)
         {
             w.Element("th", c.Title, ("scope", "col"), ("data-field", c.Field), ("data-type", c.Type),
-                ("data-width", c.Width?.ToString(CultureInfo.InvariantCulture)), Attr.Flag("data-frozen", c.Frozen), Attr.Flag("data-wrap", c.Wrap));
+                ("data-width", c.Width?.ToString(CultureInfo.InvariantCulture)), ("data-decimals", c.Decimals?.ToString(CultureInfo.InvariantCulture)),
+                ("data-sum", c.Sum), Attr.Flag("data-hidden", c.Hidden), Attr.Flag("data-frozen", c.Frozen), Attr.Flag("data-wrap", c.Wrap));
         }
         w.Close("tr").Close("thead").Line().Open("tbody").Line();
         foreach (var r in g.Rows)
@@ -58,6 +66,20 @@ public static class GridRenderer
             }
             w.Close("tr").Line();
         }
-        w.Close("tbody").Close("table").Line();
+        w.Close("tbody").Line();
+        if (g.Totals is { Count: > 0 })
+        {
+            // Tổng trên TOÀN BỘ dữ liệu của BE (chuẩn 11.4), không chỉ các dòng đang gửi.
+            w.Open("tfoot").Open("tr");
+            var labelDone = false;
+            foreach (var c in g.Columns)
+            {
+                if (g.Totals.TryGetValue(c.Field, out var t)) w.Element("td", t.Text, ("data-field", c.Field), ("data-value", t.Value));
+                else if (!labelDone && !c.Hidden) { w.Element("td", g.FooterLabel ?? "Tổng cộng"); labelDone = true; }
+                else w.Element("td", null);
+            }
+            w.Close("tr").Close("tfoot").Line();
+        }
+        w.Close("table").Line();
     }
 }

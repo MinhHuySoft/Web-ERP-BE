@@ -3,9 +3,12 @@ using Microsoft.AspNetCore.HttpOverrides;
 using WebErp.Config;
 using WebErp.Core.Auth;
 using WebErp.Core.Menu;
+using WebErp.Core.Metadata;
 using WebErp.Core.Tenancy;
 using WebErp.Erp.Connection;
 using WebErp.Erp.Menu;
+using WebErp.Erp.Metadata;
+using WebErp.Erp.Screens;
 using WebErp.Erp.Security;
 using WebErp.Host;
 using WebErp.Host.Auth;
@@ -36,6 +39,10 @@ builder.Services.AddSingleton(builder.Configuration.GetSection("WebErp:Erp").Get
 builder.Services.AddSingleton<ErpConnectionFactory>();
 builder.Services.AddSingleton<IErpUsers, ErpUsers>();
 builder.Services.AddSingleton<IErpMenu, ErpMenu>();
+// Màn dựng từ metadata ERP (M2 danh sách, M3 xem chứng từ): chỉ đọc.
+builder.Services.AddSingleton<ErpMetadata>();
+builder.Services.AddSingleton<ErpPermissions>();
+builder.Services.AddSingleton<IErpScreens, ErpScreens>();
 builder.Services.AddSingleton<MenuService>();
 
 builder.Services.AddWebErpAuth(options);
