@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Phan web dung chung cho Host va Admin: tra ERP-HTML, loi -> ma HTTP, header bao mat, /config.js cho FE. -->
+  <ItemGroup>
+    <ProjectReference Include="..\WebErp.Core\WebErp.Core.csproj" />
+    <ProjectReference Include="..\WebErp.Html\WebErp.Html.csproj" />
+    <ProjectReference Include="..\WebErp.Config\WebErp.Config.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+</Project>

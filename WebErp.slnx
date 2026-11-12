@@ -4,6 +4,7 @@
     <Project Path="src/WebErp.Html/WebErp.Html.csproj" />
     <Project Path="src/WebErp.Erp/WebErp.Erp.csproj" />
     <Project Path="src/WebErp.Config/WebErp.Config.csproj" />
+    <Project Path="src/WebErp.Web/WebErp.Web.csproj" />
     <Project Path="src/WebErp.Host/WebErp.Host.csproj" />
     <Project Path="src/WebErp.Admin/WebErp.Admin.csproj" />
   </Folder>

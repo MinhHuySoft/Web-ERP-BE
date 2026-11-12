@@ -1,18 +1,19 @@
-<Project Sdk="Microsoft.NET.Sdk">
-  <!-- Quan tri cau hinh. M1: dong lenh tren VPS. Trang web quan tri (TOTP) o M5. -->
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <!-- Quan tri cau hinh: trang web (host rieng, TOTP) + dong lenh tren VPS (WebErp.Admin.exe <lenh>). -->
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
     <AssemblyName>WebErp.Admin</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\WebErp.Core\WebErp.Core.csproj" />
+    <ProjectReference Include="..\WebErp.Html\WebErp.Html.csproj" />
     <ProjectReference Include="..\WebErp.Erp\WebErp.Erp.csproj" />
     <ProjectReference Include="..\WebErp.Config\WebErp.Config.csproj" />
+    <ProjectReference Include="..\WebErp.Web\WebErp.Web.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="appsettings.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <PackageReference Include="QRCoder" />
   </ItemGroup>
   <ItemGroup>
-    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <InternalsVisibleTo Include="WebErp.Tests" />
   </ItemGroup>
 </Project>

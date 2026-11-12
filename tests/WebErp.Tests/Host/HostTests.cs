@@ -65,7 +65,7 @@ public sealed class HostTests(HostFixture f)
         using var c = f.Client();
         var r = await HostFixture.LoginAsync(c, " admin ", " 123 ");
         Assert.Equal(HttpStatusCode.SeeOther, r.StatusCode);
-        Assert.Equal("/erp/home", r.Headers.Location!.ToString());
+        Assert.Equal("/erp/session", r.Headers.Location!.ToString());
 
         var session = await HttpAssert.Status(await c.SendAsync(HostFixture.FrontendGet("/erp/session")), HttpStatusCode.OK);
         Assert.Contains("<dd data-value=\"admin\">Quản trị hệ thống</dd>", session);

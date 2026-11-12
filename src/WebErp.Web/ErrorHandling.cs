@@ -3,10 +3,9 @@ using Microsoft.AspNetCore.Diagnostics;
 using WebErp.Config;
 using WebErp.Core.Errors;
 using WebErp.Core.Messages;
-using WebErp.Host.Html;
 using WebErp.Html.Screens;
 
-namespace WebErp.Host.Middleware;
+namespace WebErp.Web;
 
 /// <summary>
 /// Lỗi chưa bắt → mã HTTP đúng chuẩn 3.2 + <c>messages</c>. Không bao giờ gửi chi tiết lỗi nội bộ (SQL, stack) cho trình duyệt;

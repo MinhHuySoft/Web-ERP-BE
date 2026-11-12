@@ -12,6 +12,8 @@ param(
     # Thư mục dữ liệu: biến môi trường cấp máy WebErp__Root (cùng biến Host và WebErp.Admin đọc), mặc định C:\WebErp.
     [string]$Root = $(if ($env:WebErp__Root) { $env:WebErp__Root } else { 'C:\WebErp' }),
     [string]$HealthUrl = $(if ($env:WEBERP_HEALTH_URL) { $env:WEBERP_HEALTH_URL } else { 'http://127.0.0.1:8081/health' }),
+    # Site quản trị (README mục 9). Chưa tạo C:\WebErp\sites\admin thì bỏ qua, chỉ cập nhật dòng lệnh ở tools\admin.
+    [string]$AdminHealthUrl = $(if ($env:WEBERP_ADMIN_HEALTH_URL) { $env:WEBERP_ADMIN_HEALTH_URL } else { 'http://127.0.0.1:8082/health' }),
     [int]$HealthTimeoutSeconds = 90
 )
 $ErrorActionPreference = 'Stop'
@@ -19,6 +21,7 @@ $ErrorActionPreference = 'Stop'
 
 $site = Join-Path $Root 'sites\app'
 $adminDir = Join-Path $Root 'tools\admin'
+$adminSite = Join-Path $Root 'sites\admin'
 $previous = Join-Path $Root 'releases\previous'
 
 function Copy-Mirror([string]$from, [string]$to, [string[]]$extra) {
@@ -39,11 +42,11 @@ function Set-Online([string]$dir) {
     Remove-Item (Join-Path $dir 'app_offline.htm') -ErrorAction SilentlyContinue
 }
 
-function Wait-Healthy([string]$expected) {
+function Wait-Healthy([string]$expected, [string]$url = $HealthUrl) {
     $deadline = (Get-Date).AddSeconds($HealthTimeoutSeconds)
     do {
         try {
-            $r = Invoke-RestMethod -Uri $HealthUrl -UseBasicParsing -TimeoutSec 10
+            $r = Invoke-RestMethod -Uri $url -UseBasicParsing -TimeoutSec 10
             if (-not $expected -or $r.version -eq $expected) { return $true }
             Write-Host "  /health trả phiên bản $($r.version), đang chờ $expected..."
         } catch {
@@ -84,6 +87,20 @@ Set-Online $site
 
 if (Wait-Healthy $version) {
     Write-Host "Đã chạy phiên bản $version."
+    # Site quản trị: cập nhật sau site người dùng. Lỗi ở đây chỉ cảnh báo, không quay lui site người dùng.
+    if (Test-Path $adminSite) {
+        Set-Offline $adminSite
+        Start-Sleep -Seconds 3
+        try {
+            Copy-Mirror (Join-Path $Package 'admin') $adminSite @('/XF', 'app_offline.htm', '/XD', 'logs')
+        } finally {
+            Set-Online $adminSite
+        }
+        if (Wait-Healthy $version $AdminHealthUrl) { Write-Host "Trang quản trị chạy phiên bản $version." }
+        else { Write-Warning "Trang quản trị chưa trả lời $AdminHealthUrl. Kiểm tra site WebErpAdmin (README mục 9)." }
+    } else {
+        Write-Host "Chưa có site quản trị ($adminSite): chỉ cập nhật dòng lệnh ở $adminDir."
+    }
     exit 0
 }
 

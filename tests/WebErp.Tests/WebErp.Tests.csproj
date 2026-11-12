@@ -10,5 +10,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\WebErp.Host\WebErp.Host.csproj" />
+    <ProjectReference Include="..\..\src\WebErp.Admin\WebErp.Admin.csproj" />
   </ItemGroup>
 </Project>

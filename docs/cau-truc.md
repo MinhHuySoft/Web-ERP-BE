@@ -6,10 +6,13 @@
 ## 1. Project và chiều phụ thuộc
 
 ```text
-WebErp.Host ─┬─► WebErp.Html ───┐
-WebErp.Admin ┼─► WebErp.Erp ────┼─► WebErp.Core
-             └─► WebErp.Config ─┘
+WebErp.Host ─┬─► WebErp.Web ──┬─► WebErp.Html ───┐
+WebErp.Admin ┘                ├─► WebErp.Config ─┼─► WebErp.Core
+              └──────────────► WebErp.Erp ───────┘
 ```
+
+`WebErp.Web` (thêm khi làm trang quản trị) gom phần web dùng chung cho hai site: trả ERP-HTML, lỗi → mã HTTP, header bảo mật,
+`/config.js` + tệp tĩnh FE. Không có nghiệp vụ.
 
 | Project | Có gì (M1) |
 |---|---|
@@ -18,7 +21,8 @@ WebErp.Admin ┼─► WebErp.Erp ────┼─► WebErp.Core
 | `src/WebErp.Erp` | `Connection/` (mở kết nối theo công ty, timeout), `Security/ErpUsers` (`SY_User`), `Menu/ErpMenu` (`<Module>_GetUserMenuFnc`), `Diagnostics/ErpProbe` |
 | `src/WebErp.Config` | `ConfigDatabase` (SQLite, Host chỉ đọc), `ConfigMigrator` (chạy `db/config/*.sql`), `SqliteTenantStore` (bản chụp + nạp lại theo `config_meta.version`), `ConfigWriter` (chỉ Admin), `SecretProtector`, `DataProtectionSetup` |
 | `src/WebErp.Host` | `Program.cs`, `Middleware/` (công ty theo host, lỗi → ERP-HTML, `/config.js`, header bảo mật), `Auth/` (cookie tự chứa, kiểm cookie, chống dò mật khẩu, menu cache), `Endpoints/` (`/erp/login`, `/erp/logout`, `/erp/session`, `/erp/menu`, `/erp/home`, `/erp/screens/*`, `/erp/reports/*`, `/health`) |
-| `src/WebErp.Admin` | Dòng lệnh quản trị cấu hình (`init`, `tenant …`, `backup`) |
+| `src/WebErp.Web` | `HtmlResults`, `ErrorHandling`, `SecurityHeaders`, `FrontendConfig` (`/config.js` + FE cùng origin) |
+| `src/WebErp.Admin` | Trang quản trị trên web (`Web/`: cổng host + HTTPS, đăng nhập mật khẩu + TOTP, thiết lập lần đầu có QR, công ty, cài đặt chung, nhật ký) và dòng lệnh (`Cli.cs`: `init`, `tenant …`, `admin …`, `backup`) |
 | `tests/WebErp.Tests` | Unit + Host qua WebApplicationFactory (ERP giả trong bộ nhớ) |
 | `tests/WebErp.ContractTests` | HTML của renderer chạy qua `validate.js` của FE trong Edge không giao diện: 0 lỗi, 0 cảnh báo |
 | `tests/WebErp.IntegrationTests` | Đọc `SY_User`, menu trên DB **giả** tạo tạm ở LocalDB, xóa sau khi chạy |
