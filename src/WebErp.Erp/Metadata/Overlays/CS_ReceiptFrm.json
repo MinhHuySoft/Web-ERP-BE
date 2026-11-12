@@ -1,0 +1,68 @@
+// Phiếu thu. Nguồn: mã dịch ngược ERP/CS_ReceiptFrm.cs:928, 1471-1508, 1584, 1657-1670; cột kiểm trên MedData 2026-11-12.
+// Form viết tay có đọc SY_FrmCfg (T0/T1… nếu đủ TN+PK) nên cấu hình DB đứng trước, tệp này bù phần thiếu.
+{
+  "form": "CS_ReceiptFrm",
+  "formType": "EDIT",
+  "caption": "Phiếu thu",
+  "useDbConfig": true,
+  "cfg": {
+    "SP": "9",
+    "DFP": "DocumentDate",
+    "T0": {
+      "TN": "CS_ReceiptTbl",
+      "PK": "DocumentID",
+      "SO": "DocumentDate desc, DocumentID desc",
+      "HDE": "SearchField;isBank",
+      "SUM": "BaseTotal",
+      "ACP": "BaseTotal",
+      "GD2": "DocumentID;DocumentDate;ObjectID;ObjectName;Memo;BaseTotal;CurrencyID;CashAccountID;Status"
+    },
+    "T1": {
+      "TN": "CS_ReceiptDetailTbl",
+      "PK": "UserAutoID",
+      "MDL": "DocumentID",
+      "DCP": "Chi tiết thu tiền",
+      "HDE": "DocumentID",
+      "SUM": "SourceAmount;Amount;VATAmount;TotalAmount"
+    },
+    "T2": {
+      "TN": "CS_VATInvoiceTbl",
+      "PK": "UserAutoID",
+      "MDL": "ReceiptID",
+      "DCP": "Thông tin hóa đơn",
+      "HDE": "PaymentID;ReceiptID",
+      "SUM": "Amount;VATAmount"
+    },
+    "T3": {
+      "TN": "CS_ReceiptAcc2View",
+      "PK": "DocumentID",
+      "MDL": "DocumentID",
+      "DCP": "Định khoản",
+      "HDE": "DocumentID",
+      "SUM": "SourceAmount;Amount",
+      "SO": "DocumentID",
+      "HHA": "1",
+      "ACP": "SourceAmount;Amount"
+    },
+    "T4": {
+      "TN": "CS_ReceiptStatusLogTbl",
+      "PK": "UserAutoID",
+      "MDL": "DocumentID",
+      "DCP": "Các trạng thái duyệt",
+      "HDE": "DocumentID",
+      "OPT": "1"
+    }
+  },
+  "para": {
+    "": {
+      "T0": {
+        "FTW": "CS_ReceiptTbl.isBank = 0"
+      }
+    },
+    "Bank": {
+      "T0": {
+        "FTW": "CS_ReceiptTbl.isBank = 1"
+      }
+    }
+  }
+}

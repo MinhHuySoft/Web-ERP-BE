@@ -1,0 +1,66 @@
+// Hóa đơn bán hàng. Nguồn: mã dịch ngược ERP/AR_InvoiceFrm.cs:1439, 2229-2257, 2409, 2499-2534; cột kiểm trên MedData 2026-11-12.
+// Form viết tay có đọc SY_FrmCfg (T0/T1… nếu đủ TN+PK) nên cấu hình DB đứng trước, tệp này bù phần thiếu.
+{
+  "form": "AR_InvoiceFrm",
+  "formType": "EDIT",
+  "caption": "Hóa đơn bán hàng",
+  "useDbConfig": true,
+  "cfg": {
+    "SP": "9",
+    "DFP": "DocumentDate",
+    "T0": {
+      "TN": "AR_InvoiceTbl",
+      "PK": "DocumentID",
+      "SO": "DocumentDate desc, DocumentID desc",
+      "HDE": "ConsigneeID;NotifyPartyID;PortOfLoading;FinalDestination;SailingOn;TradingTerms;InvoiceCode;InvoiceDate;Remark;ContainerNo;Transporter;Payment;PortOfDischarge;VesselVoy;BLNumber;SearchField",
+      "SUM": "BaseTotal;AmountTotal;VATAmountTotal;PhiKhacTotal",
+      "TN1": "CF_ObjectTbl",
+      "FKA1": "ObjectID",
+      "FKB1": "ObjectID",
+      "SE1": "A.ObjectName, A.Address"
+    },
+    "T1": {
+      "TN": "AR_InvoiceDetailTbl",
+      "PK": "UserAutoID",
+      "MDL": "DocumentID",
+      "DCP": "Chi tiết hàng",
+      "HDE": "DocumentID",
+      "SUM": "SourceAmount;Amount;Quantity;VATAmount;TotalAmount;ExportAmount;DiscountAmount;DiscountAmountTT;DiscountAmount2;PhiKhac",
+      "TN1": "CF_ItemTbl",
+      "FKA1": "ItemID",
+      "FKB1": "ItemID",
+      "SE1": "A.ItemName, A.Unit, A.Unit2"
+    },
+    "T2": {
+      "TN": "AR_VATInvoiceTbl",
+      "PK": "UserAutoID",
+      "MDL": "InvoiceID",
+      "DCP": "Thông tin hóa đơn",
+      "HDE": "InvoiceID;ReturnID;ServiceID",
+      "SUM": "Amount;VATAmount"
+    },
+    "T3": {
+      "TN": "AR_InvoiceAcc2View",
+      "PK": "DocumentID",
+      "MDL": "DocumentID",
+      "DCP": "Định khoản",
+      "HDE": "DocumentID",
+      "SUM": "SourceAmount;Amount",
+      "SO": "DocumentID",
+      "HHA": "1",
+      "ACP": "SourceAmount;Amount"
+    }
+  },
+  "para": {
+    "": {
+      "T0": {
+        "FTW": "isExport = 0"
+      }
+    },
+    "Export": {
+      "T0": {
+        "FTW": "isExport = 1"
+      }
+    }
+  }
+}

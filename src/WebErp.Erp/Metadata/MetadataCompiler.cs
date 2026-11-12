@@ -93,7 +93,12 @@ public static class MetadataCompiler
         return new SlotMeta(id.ToUpperInvariant(), table, pk, Get("TV"), Get("SE"), Get("EX"), joins, Get("SO"), Get("SDD") == "1",
             int.TryParse(Get("TRS"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var top) && top > 0 ? top : null,
             Get("FTR"), Get("FTX"), Get("FTXS"), Get("MUL"), Get("MDL"),
-            List(Get("GD2")), List(Get("HDE")), List(Get("HDE2")), List(Get("HDE3")), List(Get("ACP")), List(Get("SUM")), Get("DCP"));
+            List(Get("GD2")), List(Get("HDE")), List(Get("HDE2")), List(Get("HDE3")), List(Get("ACP")), List(Get("SUM")), Get("DCP"))
+        {
+            FilterWeb = Get("FTW"),
+            HideOnHideAmount = Get("HHA") == "1",
+            Optional = Get("OPT") == "1",
+        };
     }
 
     private static List<FilterMeta> Filters(IReadOnlyList<FrmFltRow> rows) =>

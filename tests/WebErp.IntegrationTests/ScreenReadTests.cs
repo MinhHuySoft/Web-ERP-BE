@@ -113,7 +113,9 @@ public sealed class ScreenReadTests(FakeErpDatabase db) : IClassFixture<FakeErpD
     public async Task Hand_coded_and_unknown_forms_are_not_supported()
     {
         db.SkipIfUnavailable();
-        Assert.Equal(ScreenStatus.NotSupported, (await Screens().OpenListAsync(Req("ketoan", "HN", "CS_ReceiptFrm"), CancellationToken.None)).Status);
+        Assert.Equal(ScreenStatus.NotSupported, (await Screens().OpenListAsync(Req("ketoan", "HN", "NguoiDungFrm"), CancellationToken.None)).Status);
+        // Form viết tay CÓ tệp mô tả nhưng DB giả không có bảng CS_ReceiptTbl: báo lỗi cấu hình, không ném lỗi 500.
+        Assert.Equal(ScreenStatus.ConfigError, (await Screens().OpenListAsync(Req("ketoan", "HN", "CS_ReceiptFrm"), CancellationToken.None)).Status);
         Assert.Equal(ScreenStatus.NotSupported, (await Screens().OpenListAsync(Req("ketoan", "HN", "Khong_Co_Frm"), CancellationToken.None)).Status);
     }
 }

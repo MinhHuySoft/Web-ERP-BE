@@ -7,4 +7,8 @@
     <PackageReference Include="Dapper" />
     <PackageReference Include="Microsoft.Data.SqlClient" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Tep mo ta form viet tay (overlay), doc luc chay. -->
+    <EmbeddedResource Include="Metadata\Overlays\*.json" LogicalName="WebErp.Overlays.%(Filename)%(Extension)" />
+  </ItemGroup>
 </Project>

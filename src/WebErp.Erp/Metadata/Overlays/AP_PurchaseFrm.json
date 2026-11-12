@@ -1,0 +1,75 @@
+// Mua hàng. Nguồn: mã dịch ngược ERP/AP_PurchaseFrm.cs:1232, 1926-1949, 2089, 2177-2196; cột kiểm trên MedData 2026-11-12.
+// Form viết tay có đọc SY_FrmCfg (T0/T1… nếu đủ TN+PK) nên cấu hình DB đứng trước, tệp này bù phần thiếu.
+{
+  "form": "AP_PurchaseFrm",
+  "formType": "EDIT",
+  "caption": "Mua hàng",
+  "useDbConfig": true,
+  "cfg": {
+    "SP": "9",
+    "DFP": "DocumentDate",
+    "T0": {
+      "TN": "AP_PurchaseTbl",
+      "PK": "DocumentID",
+      "SO": "DocumentDate desc, DocumentID desc",
+      "HDE": "SearchField;isImport",
+      "SUM": "BaseTotal",
+      "TN1": "CF_ObjectTbl",
+      "FKA1": "ObjectID",
+      "FKB1": "ObjectID",
+      "SE1": "A.ObjectName, A.Address"
+    },
+    "T1": {
+      "TN": "AP_PurchaseDetailTbl",
+      "PK": "UserAutoID",
+      "MDL": "DocumentID",
+      "DCP": "Hàng hóa",
+      "HDE": "DocumentID",
+      "SUM": "SourceAmount;Amount;Quantity;ImportAmount;VATAmount;TotalAmount;PurchaseCost;PhiKhac;DiscountAmount",
+      "TN1": "CF_ItemTbl",
+      "FKA1": "ItemID",
+      "FKB1": "ItemID",
+      "SE1": "A.ItemName, A.Unit, A.Unit2"
+    },
+    "T2": {
+      "TN": "AP_PurchaseAllocateTbl",
+      "PK": "UserAutoID",
+      "MDL": "DocumentID",
+      "DCP": "Chi phí mua hàng",
+      "HDE": "DocumentID",
+      "SUM": "Amount"
+    },
+    "T3": {
+      "TN": "AP_VATInvoiceTbl",
+      "PK": "UserAutoID",
+      "MDL": "PurchaseID",
+      "DCP": "Thông tin hóa đơn",
+      "HDE": "PurchaseID;ReturnID;ServiceID",
+      "SUM": "Amount;VATAmount"
+    },
+    "T4": {
+      "TN": "AP_PurchaseAcc2View",
+      "PK": "DocumentID",
+      "MDL": "DocumentID",
+      "DCP": "Định khoản",
+      "HDE": "DocumentID",
+      "SUM": "SourceAmount;Amount",
+      "SO": "DocumentID",
+      "HHA": "1",
+      "ACP": "SourceAmount;Amount"
+    }
+  },
+  "para": {
+    "": {
+      "T0": {
+        "FTW": "isImport = 0",
+        "HDE": "SearchField;isImport;ImportAccID;ImportAccID2"
+      }
+    },
+    "Import": {
+      "T0": {
+        "FTW": "isImport = 1"
+      }
+    }
+  }
+}

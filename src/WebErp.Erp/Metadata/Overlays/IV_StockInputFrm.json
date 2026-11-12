@@ -1,0 +1,64 @@
+// Phiếu nhập kho. Nguồn: mã dịch ngược ERP/IV_StockInputFrm.cs:1266-1299, 1355-1358, 1443-1454; cột kiểm trên MedData 2026-11-12.
+// Form viết tay có đọc SY_FrmCfg (T0/T1… nếu đủ TN+PK) nên cấu hình DB đứng trước, tệp này bù phần thiếu.
+{
+  "form": "IV_StockInputFrm",
+  "formType": "EDIT",
+  "caption": "Phiếu nhập kho",
+  "useDbConfig": true,
+  "cfg": {
+    "SP": "9",
+    "DFP": "DocumentDate",
+    "T0": {
+      "TN": "IV_InputTbl",
+      "PK": "DocumentID",
+      "SO": "DocumentDate desc, DocumentID desc",
+      "HDE": "SearchField",
+      "SUM": "BaseTotal",
+      "TN1": "CF_ObjectTbl",
+      "FKA1": "ObjectID",
+      "FKB1": "ObjectID",
+      "SE1": "A.ObjectName, A.Address"
+    },
+    "T1": {
+      "TN": "IV_InputDetailTbl",
+      "PK": "UserAutoID",
+      "MDL": "DocumentID",
+      "DCP": "Chi tiết hàng",
+      "HDE": "DocumentID",
+      "SUM": "Amount;Quantity",
+      "TN1": "CF_ItemTbl",
+      "FKA1": "ItemID",
+      "FKB1": "ItemID",
+      "SE1": "A.ItemName, A.Unit, A.Unit2"
+    },
+    "T2": {
+      "TN": "IV_InputRefDocTbl",
+      "PK": "UserAutoID",
+      "MDL": "DocumentID",
+      "DCP": "Phiếu gia công",
+      "HDE": "DocumentID",
+      "SUM": "Amount",
+      "OPT": "1"
+    },
+    "T3": {
+      "TN": "IV_InputRefExpTbl",
+      "PK": "UserAutoID",
+      "MDL": "DocumentID",
+      "DCP": "Chi phí gia công",
+      "HDE": "DocumentID",
+      "SUM": "Amount",
+      "OPT": "1"
+    },
+    "T4": {
+      "TN": "IV_InputAcc2View",
+      "PK": "DocumentID",
+      "MDL": "DocumentID",
+      "DCP": "Định khoản",
+      "HDE": "DocumentID",
+      "SUM": "Amount",
+      "SO": "DocumentID",
+      "HHA": "1",
+      "ACP": "Amount"
+    }
+  }
+}

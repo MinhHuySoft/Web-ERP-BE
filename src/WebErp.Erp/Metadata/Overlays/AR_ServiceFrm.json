@@ -1,0 +1,50 @@
+// Bán dịch vụ. Nguồn: mã dịch ngược ERP/AR_ServiceFrm.cs:2018-2029, 2091, 2158-2171; cột kiểm trên MedData 2026-11-12.
+// Form viết tay có đọc SY_FrmCfg (T0/T1… nếu đủ TN+PK) nên cấu hình DB đứng trước, tệp này bù phần thiếu.
+{
+  "form": "AR_ServiceFrm",
+  "formType": "EDIT",
+  "caption": "Bán dịch vụ",
+  "useDbConfig": true,
+  "cfg": {
+    "SP": "9",
+    "DFP": "DocumentDate",
+    "T0": {
+      "TN": "AR_ServiceTbl",
+      "PK": "DocumentID",
+      "SO": "DocumentDate desc, DocumentID desc",
+      "HDE": "SearchField",
+      "SUM": "BaseTotal",
+      "TN1": "CF_ObjectTbl",
+      "FKA1": "ObjectID",
+      "FKB1": "ObjectID",
+      "SE1": "A.ObjectName, A.Address"
+    },
+    "T1": {
+      "TN": "AR_ServiceDetailTbl",
+      "PK": "UserAutoID",
+      "MDL": "DocumentID",
+      "DCP": "Chi tiết hàng",
+      "HDE": "DocumentID",
+      "SUM": "SourceAmount;Amount;Quantity;VATAmount;TotalAmount;DiscountAmount;PhiKhac"
+    },
+    "T2": {
+      "TN": "AR_VATInvoiceTbl",
+      "PK": "UserAutoID",
+      "MDL": "ServiceID",
+      "DCP": "Thông tin hóa đơn",
+      "HDE": "InvoiceID;ReturnID;ServiceID",
+      "SUM": "Amount;VATAmount"
+    },
+    "T3": {
+      "TN": "AR_ServiceAcc2View",
+      "PK": "DocumentID",
+      "MDL": "DocumentID",
+      "DCP": "Định khoản",
+      "HDE": "DocumentID",
+      "SUM": "SourceAmount;Amount",
+      "SO": "DocumentID",
+      "HHA": "1",
+      "ACP": "SourceAmount;Amount"
+    }
+  }
+}

@@ -69,6 +69,18 @@ public sealed record SlotMeta(
 
     /// <summary>Mệnh đề FROM thay thế (form LIST không có T0: <c>SY_FrmLstTbl.TableDetailSelectFrom</c>).</summary>
     public string? FromOverride { get; init; }
+
+    /// <summary>
+    /// Điều kiện luôn áp (key web <c>FTW</c> của tệp mô tả form viết tay), vd <c>isBank = 1</c> theo Para. Khác FTX: không bị cấu hình
+    /// <c>SY_FrmCfg</c> của khách đè mất, vì form viết tay của WinForms tự thêm điều kiện này ngoài cấu hình.
+    /// </summary>
+    public string? FilterWeb { get; init; }
+
+    /// <summary>Key web <c>HHA</c> = 1: ẩn cả tab khi người dùng bị ẩn tiền (như lưới "Định khoản" của form viết tay).</summary>
+    public bool HideOnHideAmount { get; init; }
+
+    /// <summary>Key web <c>OPT</c> = 1: bảng/view không có trong DB của khách thì bỏ qua tab (vd bảng lịch sử trạng thái).</summary>
+    public bool Optional { get; init; }
 }
 
 /// <summary><c>Left|Inner join Table Alias on {Left}.LeftKey = Alias.RightKey Extra</c>; <see cref="Select"/> thêm vào danh sách cột.</summary>

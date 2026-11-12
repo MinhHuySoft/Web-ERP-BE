@@ -1,0 +1,45 @@
+// Phân rã - lắp ghép. Nguồn: mã dịch ngược ERP/IV_StockAdjustFrm.cs:736-757, 788, 818-837; cột kiểm trên MedData 2026-11-12.
+// Form viết tay có đọc SY_FrmCfg (T0/T1… nếu đủ TN+PK) nên cấu hình DB đứng trước, tệp này bù phần thiếu.
+{
+  "form": "IV_StockAdjustFrm",
+  "formType": "EDIT",
+  "caption": "Phân rã - lắp ghép",
+  "useDbConfig": true,
+  "cfg": {
+    "SP": "9",
+    "DFP": "DocumentDate",
+    "T0": {
+      "TN": "IV_AdjustTbl",
+      "PK": "DocumentID",
+      "SO": "DocumentDate desc, DocumentID desc",
+      "HDE": "SearchField",
+      "TN1": "CF_ObjectTbl",
+      "FKA1": "ObjectID",
+      "FKB1": "ObjectID",
+      "SE1": "A.ObjectName, A.Address"
+    },
+    "T1": {
+      "TN": "IV_AdjustDetailTbl",
+      "PK": "UserAutoID",
+      "MDL": "DocumentID",
+      "DCP": "Chi tiết hàng",
+      "HDE": "DocumentID",
+      "SUM": "Amount;Quantity",
+      "TN1": "CF_ItemTbl",
+      "FKA1": "ItemID",
+      "FKB1": "ItemID",
+      "SE1": "A.ItemName, A.Unit, A.Unit2",
+      "SO": "AdjustGroup, Type desc, UserAutoID"
+    },
+    "T2": {
+      "TN": "IV_AdjustAcc2View",
+      "PK": "DocumentID",
+      "MDL": "DocumentID",
+      "DCP": "Định khoản",
+      "HDE": "DocumentID",
+      "SUM": "Amount",
+      "SO": "DocumentID",
+      "OPT": "1"
+    }
+  }
+}

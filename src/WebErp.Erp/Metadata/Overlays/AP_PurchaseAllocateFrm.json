@@ -1,0 +1,47 @@
+// Phân bổ chi phí mua hàng. Nguồn: mã dịch ngược ERP/AP_PurchaseAllocateFrm.cs:681-686, 732-739, 772-773; cột kiểm trên MedData 2026-11-12.
+// Form luôn viết cứng (không đọc SY_FrmCfg): chỉ dùng tệp này.
+{
+  "form": "AP_PurchaseAllocateFrm",
+  "formType": "EDIT",
+  "caption": "Phân bổ chi phí mua hàng",
+  "useDbConfig": false,
+  "cfg": {
+    "SP": "9",
+    "DFP": "DocumentDate",
+    "T0": {
+      "TN": "IV_InputTbl",
+      "PK": "DocumentID",
+      "SO": "DocumentDate desc, DocumentID desc",
+      "HDE": "SearchField",
+      "FTW": "IV_InputTbl.InputType = 'PB'"
+    },
+    "T1": {
+      "TN": "IV_InputRefDocTbl",
+      "PK": "UserAutoID",
+      "MDL": "DocumentID",
+      "DCP": "Chứng từ mua hàng",
+      "HDE": "DocumentID",
+      "SUM": "Amount"
+    },
+    "T2": {
+      "TN": "IV_InputRefExpTbl",
+      "PK": "UserAutoID",
+      "MDL": "DocumentID",
+      "DCP": "Chứng từ chi phí mua hàng",
+      "HDE": "DocumentID",
+      "SUM": "Amount"
+    },
+    "T3": {
+      "TN": "IV_InputDetailTbl",
+      "PK": "UserAutoID",
+      "MDL": "DocumentID",
+      "DCP": "Hàng hóa - vật tư phân bổ",
+      "HDE": "DocumentID",
+      "SUM": "Amount;Quantity",
+      "TN1": "CF_ItemTbl",
+      "FKA1": "ItemID",
+      "FKB1": "ItemID",
+      "SE1": "A.ItemName, A.Unit, A.Unit2"
+    }
+  }
+}
