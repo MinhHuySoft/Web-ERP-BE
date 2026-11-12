@@ -85,14 +85,17 @@ public static class Program
                 return 0;
             case "tenant add":
                 Need(key);
-                env.Writer.AddTenant(key!, a.Get("name") ?? throw new ArgumentException("Thiếu --name."), a.Get("module") ?? "SY", a.Get("tax-code"), a.Get("db-label"));
+                var name = a.Get("name") ?? throw new ArgumentException("Thiếu --name.");
+                // Đọc và kiểm chuỗi kết nối TRƯỚC, để nhập sai không để lại công ty dở dang.
+                var connection = ReadConnection("Chuỗi kết nối SQL Server của công ty: ");
+                env.Writer.AddTenant(key!, name, a.Get("module") ?? "SY", a.Get("tax-code"), a.Get("db-label"));
                 foreach (var h in a.All("host")) env.Writer.AddHost(key!, h);
-                env.Writer.SetConnection(key!, ReadSecret("Chuỗi kết nối SQL Server của công ty: "));
+                env.Writer.SetConnection(key!, connection);
                 Console.WriteLine($"Đã thêm công ty {key}. Chạy 'tenant test {key}' để thử kết nối.");
                 return 0;
             case "tenant set-connection":
                 Need(key);
-                env.Writer.SetConnection(key!, ReadSecret("Chuỗi kết nối SQL Server mới: "));
+                env.Writer.SetConnection(key!, ReadConnection("Chuỗi kết nối SQL Server mới: "));
                 Console.WriteLine("Đã cập nhật chuỗi kết nối.");
                 return 0;
             case "tenant host-add":
@@ -130,6 +133,9 @@ public static class Program
                 var r = await new ErpProbe(new ErpConnectionFactory(env.Store, new ErpOptions())).ProbeAsync(tenant, CancellationToken.None);
                 if (!r.Ok) { Console.WriteLine($"KHÔNG kết nối được ({r.RoundTripMs} ms): {r.Error}"); return 2; }
                 Console.WriteLine($"Kết nối được: DB {r.Database}, SQL Server {r.ServerVersion}, khứ hồi {r.RoundTripMs} ms.");
+                var stored = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(await env.Store.GetConnectionStringAsync(key!, CancellationToken.None) ?? "");
+                Console.WriteLine($"Mã hóa: Encrypt={stored.Encrypt}, TrustServerCertificate={stored.TrustServerCertificate}"
+                                  + (stored.TrustServerCertificate ? " (chưa kiểm chứng chỉ của máy chủ SQL)" : ""));
                 Console.WriteLine($"SY_User: {(r.HasUserTable ? "có" : "KHÔNG")}; {tenant.ModuleId}_GetUserMenuFnc: {(r.HasMenuFunction ? "có" : "KHÔNG")}");
                 return r.HasUserTable && r.HasMenuFunction ? 0 : 3;
             default:
@@ -158,6 +164,25 @@ public static class Program
         var protector = new SecretProtector(provider);
         var actor = $"{Environment.UserName}@{Environment.MachineName} (cli)";
         return new Env(paths, new ConfigWriter(db, protector, TimeProvider.System, actor), new SqliteTenantStore(db, protector, TimeProvider.System));
+    }
+
+    /// <summary>Đọc chuỗi kết nối (ẩn), chuẩn hóa như BE sẽ dùng, báo các điểm đã đổi. Không bao giờ in lại chuỗi.</summary>
+    private static string ReadConnection(string prompt)
+    {
+        var raw = ReadSecret(prompt);
+        NormalizedConnection n;
+        try
+        {
+            n = ErpConnectionStrings.Normalize(raw, new ErpOptions());
+        }
+        catch (Exception ex) when (ex is ArgumentException or FormatException or KeyNotFoundException)
+        {
+            throw new ArgumentException("Chuỗi kết nối không đọc được (sai cú pháp hoặc từ khóa lạ).");
+        }
+        if (n.Database is null) throw new ArgumentException("Chuỗi kết nối thiếu tên DB: thêm Database=<tên DB> (hoặc Initial Catalog=<tên DB>).");
+        Console.WriteLine($"DB: {n.Database}");
+        foreach (var c in n.Changes) Console.WriteLine("  • " + c);
+        return n.ConnectionString;
     }
 
     private static string ReadSecret(string prompt)
