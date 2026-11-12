@@ -69,12 +69,26 @@ public sealed class AdminTests(AdminFixture f)
             { ["Code"] = f.NextCode(), ["__RequestVerificationToken"] = AdminFixture.Token(dialog) }));
         Assert.Contains("bị từ chối trong vài giây", await HttpAssert.Status(ok, HttpStatusCode.OK));
 
-        // Cài đặt chung: hằng mật khẩu phải đúng 6 ký tự.
+        // Cài đặt chung: hằng mật khẩu phải đúng 6 ký tự, và chỉ lưu khi thử khớp với một tài khoản ERP thật của công ty.
+        f.Erp.AddUser("MINHHUY", "Admin", " mk 1 ", "Quản trị ERP");
         var settings = await c.GetStringAsync("/admin/settings");
-        var setKey = await c.PostAsync("/admin/settings/save", new FormUrlEncodedContent(new Dictionary<string, string>
-            { ["LegacyKey"] = "ABC123", ["Code"] = f.NextCode(), ["__version"] = AdminFixture.Hidden(settings, "__version"), ["__RequestVerificationToken"] = AdminFixture.Token(settings) }));
-        Assert.Contains("Đã lưu hằng mật khẩu", await HttpAssert.Status(setKey, HttpStatusCode.OK));
-        Assert.DoesNotContain("ABC123", await c.GetStringAsync("/admin/settings"));
+        Assert.Contains("name=\"TestTenant\"", settings);
+        Task<HttpResponseMessage> SaveKey(string key, string user, string password) =>
+            c.PostAsync("/admin/settings/save", new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["LegacyKey"] = key, ["TestTenant"] = "MINHHUY", ["TestUser"] = user, ["TestPassword"] = password, ["Code"] = f.NextCode(),
+                ["__version"] = AdminFixture.Hidden(settings, "__version"), ["__RequestVerificationToken"] = AdminFixture.Token(settings),
+            }));
+        Assert.Contains("CHƯA lưu", await HttpAssert.Status(await SaveKey("ABC123", "admin", " mk 1 "), HttpStatusCode.UnprocessableEntity));
+        Assert.Contains("CHƯA lưu", await HttpAssert.Status(await SaveKey(FakeErp.Key, "admin", "mk 1"), HttpStatusCode.UnprocessableEntity));
+        Assert.Contains("Không có tài khoản", await HttpAssert.Status(await SaveKey(FakeErp.Key, "khong-co", "x"), HttpStatusCode.UnprocessableEntity));
+        f.Erp.Down = true;
+        Assert.Contains("Không kết nối được DB", await HttpAssert.Status(await SaveKey(FakeErp.Key, "admin", " mk 1 "), HttpStatusCode.UnprocessableEntity));
+        f.Erp.Down = false;
+        Assert.Contains("Chưa đặt hằng mật khẩu ERP", await c.GetStringAsync("/admin/home")); // các lần trên không lưu gì
+        var setKey = await HttpAssert.Status(await SaveKey(FakeErp.Key, "admin", " mk 1 "), HttpStatusCode.OK);
+        Assert.Contains("Đã lưu hằng mật khẩu (đã thử với MINHHUY/Admin)", setKey);
+        Assert.DoesNotContain(FakeErp.Key, await c.GetStringAsync("/admin/settings"));
         var audit = await c.GetStringAsync("/admin/audit");
         Assert.Contains("Thêm công ty", audit);
         Assert.Contains("Đặt cài đặt", audit);

@@ -156,8 +156,8 @@ public sealed class ConfigWriter(ConfigDatabase db, SecretProtector protector, T
     }
 
     /// <summary>Đặt (hoặc xóa khi <paramref name="value"/> null) một cài đặt chung. Nhật ký không ghi giá trị.</summary>
-    public void SetSetting(string name, string? value) =>
-        Change(value is null ? "setting.clear" : "setting.set", name, null, (c, tx, now) =>
+    public void SetSetting(string name, string? value, string? detail = null) =>
+        Change(value is null ? "setting.clear" : "setting.set", name, detail, (c, tx, now) =>
             c.Execute("INSERT INTO setting (name, value_protected, updated_at) VALUES (@name, @v, @now) " +
                       "ON CONFLICT(name) DO UPDATE SET value_protected = excluded.value_protected, updated_at = excluded.updated_at",
                 new { name, v = value is null ? null : protector.ProtectSetting(value), now }, tx));

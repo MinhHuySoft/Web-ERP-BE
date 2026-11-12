@@ -1,6 +1,9 @@
 using System.Reflection;
 using WebErp.Config;
+using WebErp.Core.Auth;
+using WebErp.Core.Tenancy;
 using WebErp.Erp.Connection;
+using WebErp.Erp.Security;
 using WebErp.Web;
 
 namespace WebErp.Admin.Web;
@@ -36,6 +39,10 @@ public static class AdminWeb
         builder.Services.AddSingleton<SqliteTenantStore>();
         builder.Services.AddSingleton<AdminAccountStore>();
         builder.Services.AddSingleton(builder.Configuration.GetSection("WebErp:Erp").Get<ErpOptions>() ?? new ErpOptions());
+        // Đọc SY_User của công ty để thử hằng mật khẩu trước khi lưu (Cài đặt chung).
+        builder.Services.AddSingleton<ITenantStore>(sp => sp.GetRequiredService<SqliteTenantStore>());
+        builder.Services.AddSingleton<ErpConnectionFactory>();
+        builder.Services.AddSingleton<IErpUsers, ErpUsers>();
         builder.Services.AddScoped<TenantEndpoints.Deps>();
         builder.Services.AddAdminAuth(options);
 

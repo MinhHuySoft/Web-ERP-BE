@@ -1,6 +1,7 @@
 using System.Globalization;
 using Microsoft.Extensions.Options;
 using WebErp.Config;
+using WebErp.Core.Auth;
 using WebErp.Core.Messages;
 using WebErp.Core.Tenancy;
 using WebErp.Erp.Connection;
@@ -36,9 +37,10 @@ public static class TenantEndpoints
 
     /// <summary>Các dịch vụ dùng chung của nhóm endpoint.</summary>
     public sealed class Deps(ConfigDatabase db, SecretProtector protector, AdminAccountStore accounts, SqliteTenantStore store, ErpOptions erp,
-        TimeProvider time, IOptions<AdminOptions> options)
+        TimeProvider time, IOptions<AdminOptions> options, IErpUsers users)
     {
         public AdminAccountStore Accounts { get; } = accounts;
+        public IErpUsers Users { get; } = users;
         public SqliteTenantStore Store { get; } = store;
         public ErpOptions Erp { get; } = erp;
         public TimeProvider Time { get; } = time;

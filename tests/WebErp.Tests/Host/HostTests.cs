@@ -60,10 +60,18 @@ public sealed class HostTests(HostFixture f)
     }
 
     [Fact]
+    public async Task Password_keeps_leading_and_trailing_spaces_like_winforms()
+    {
+        using var c = f.Client();
+        Assert.Contains("mật mã không đúng", await (await HostFixture.LoginAsync(c, "space", "a b")).Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.SeeOther, (await HostFixture.LoginAsync(c, "space", " a b ")).StatusCode);
+    }
+
+    [Fact]
     public async Task Login_then_session_menu_home_and_screens()
     {
         using var c = f.Client();
-        var r = await HostFixture.LoginAsync(c, " admin ", " 123 ");
+        var r = await HostFixture.LoginAsync(c, " admin ", "123"); // tên được cắt khoảng trắng, mật khẩu thì không
         Assert.Equal(HttpStatusCode.SeeOther, r.StatusCode);
         Assert.Equal("/erp/session", r.Headers.Location!.ToString());
 
