@@ -2,7 +2,8 @@ using WebErp.Core.Messages;
 
 namespace WebErp.Html.Roles;
 
-public sealed record FieldsetModel(string Legend, IReadOnlyList<FieldModel> Fields);
+/// <param name="Id">Mã tab (vd <c>1</c>, <c>A</c> theo LYT của ERP). Trống thì đánh số 1, 2, 3…</param>
+public sealed record FieldsetModel(string Legend, IReadOnlyList<FieldModel> Fields, string? Id = null);
 
 /// <param name="Version"><c>__version</c> để phát hiện xung đột khi lưu (chuẩn 9).</param>
 public sealed record RecordModel(
@@ -27,7 +28,9 @@ public static class RecordRenderer
         var i = 1;
         foreach (var tab in r.Tabs)
         {
-            w.Open("fieldset", ("data-erp", "tab"), ("data-tab-id", (i++).ToString(System.Globalization.CultureInfo.InvariantCulture)))
+            var tabId = tab.Id ?? i.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            i++;
+            w.Open("fieldset", ("data-erp", "tab"), ("data-tab-id", tabId))
                 .Element("legend", tab.Legend).Line();
             foreach (var f in tab.Fields) FieldRenderer.Write(w, r.Id, f);
             w.Close("fieldset").Line();

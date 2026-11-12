@@ -45,7 +45,7 @@ public sealed class ErpReadTests(FakeErpDatabase db) : IClassFixture<FakeErpData
         Assert.DoesNotContain("16", ids);
         Assert.Equal("Bank", entries.Single(e => e.MenuId == "0902").Para);
         Assert.True(entries.Single(e => e.MenuId == "0930").BeginGroup);
-        Assert.Equal(["01", "09"], tree.Select(n => n.Entry.MenuId));
+        Assert.Equal(["01", "05", "09"], tree.Select(n => n.Entry.MenuId));
     }
 
     [Fact]

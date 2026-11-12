@@ -3,7 +3,11 @@ using System.Globalization;
 namespace WebErp.Html.Roles;
 
 /// <summary>Một ô nhập (chuẩn 9.2).</summary>
-/// <param name="Control"><c>text</c>, <c>password</c>, <c>textarea</c>, <c>number</c>, <c>checkbox</c>, <c>select</c>, <c>label</c>.</param>
+/// <param name="Control"><c>text</c>, <c>password</c>, <c>textarea</c>, <c>number</c> / <c>money</c> / <c>quantity</c> / <c>percent</c>,
+/// <c>date</c>, <c>datetime</c>, <c>search</c>, <c>checkbox</c>, <c>select</c>, <c>lookup</c>, <c>label</c>.</param>
+/// <param name="Decimals">Số chữ số thập phân hiển thị của ô số (<c>data-decimals</c>).</param>
+/// <param name="Display">Chữ hiển thị kèm mã: tên của ô <c>lookup</c> (<c>output[data-erp=lookup-text]</c>), hoặc nội dung ô <c>label</c>.</param>
+/// <param name="LookupSrc">URL tra cứu F4 (có <c>{q}</c>), bắt buộc với ô <c>lookup</c>.</param>
 /// <param name="Value">Giá trị bất biến. Với <c>password</c> không bao giờ được ghi ra.</param>
 /// <param name="Span">Độ rộng trên lưới 40 cột.</param>
 public sealed record FieldModel(
@@ -23,7 +27,10 @@ public sealed record FieldModel(
     string? Autocomplete = null,
     string? Pattern = null,
     string? InputMode = null,
-    string? Error = null);
+    string? Error = null,
+    int? Decimals = null,
+    string? Display = null,
+    string? LookupSrc = null);
 
 /// <summary><c>div[data-erp=field]</c>: một <c>label[for]</c> + đúng một control chính.</summary>
 public static class FieldRenderer
@@ -61,10 +68,24 @@ public static class FieldRenderer
                 w.Close("select");
                 break;
             case "label":
-                w.Element("output", f.Value, ("id", id));
+                w.Element("output", f.Display ?? f.Value, ("id", id));
                 break;
-            case "number":
-                w.Void("input", [.. common, ("inputmode", f.InputMode ?? "decimal"), ("value", f.Value)]);
+            case "number" or "money" or "quantity" or "percent":
+                w.Void("input", [.. common, ("inputmode", f.InputMode ?? "decimal"), ("value", f.Value),
+                    ("data-decimals", f.Decimals?.ToString(CultureInfo.InvariantCulture))]);
+                break;
+            case "date":
+                w.Void("input", [.. common, ("type", "date"), ("value", f.Value is { Length: >= 10 } d ? d[..10] : f.Value)]);
+                break;
+            case "datetime":
+                w.Void("input", [.. common, ("type", "datetime-local"), ("value", f.Value is { Length: >= 16 } t ? t[..16] : f.Value)]);
+                break;
+            case "search":
+                w.Void("input", [.. common, ("type", "search"), ("value", f.Value)]);
+                break;
+            case "lookup":
+                w.Void("input", [.. common, ("value", f.Value), ("data-lookup-src", f.LookupSrc ?? throw new InvalidOperationException($"Ô lookup '{f.Name}' thiếu LookupSrc."))]);
+                w.Element("output", f.Display, ("data-erp", "lookup-text"), ("for", id));
                 break;
             default:
                 w.Void("input", [.. common, ("value", f.Value)]);

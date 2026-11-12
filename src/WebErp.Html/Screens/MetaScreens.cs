@@ -1,0 +1,147 @@
+using System.Globalization;
+using WebErp.Core.Messages;
+using WebErp.Core.Metadata;
+using WebErp.Html.Roles;
+
+namespace WebErp.Html.Screens;
+
+/// <summary>Đường dẫn của một màn (Host dựng; Html không biết route).</summary>
+/// <param name="Self">URL màn danh sách, không query string (action của form lọc).</param>
+/// <param name="Record">URL xem một chứng từ theo khóa.</param>
+/// <param name="Detail">URL tab chi tiết theo (khóa, slot).</param>
+public sealed record ScreenUrls(string Self, string? Para, Func<string, string> Record, Func<string, string, string> Detail, string Refresh);
+
+/// <summary>Màn dựng từ metadata ERP: danh sách (M2), xem chứng từ và tab chi tiết (M3). Chỉ đọc.</summary>
+public static class MetaScreens
+{
+    private static readonly CultureInfo Vi = CultureInfo.GetCultureInfo("vi-VN");
+
+    public static string List(ListView v, string title, string? menuId, ScreenUrls urls)
+    {
+        var form = v.Form!;
+        var isEdit = form.IsEdit;
+        var messages = new List<ErpMessage>();
+        return ScreenRenderer.Render(new ScreenModel(form.FormName, isEdit ? FormTypes.Edit : FormType(form.FormType), form.RuntimeName, title,
+            Mode: isEdit ? "find" : "view", Para: urls.Para, MenuId: menuId, RefreshSrc: urls.Refresh, Messages: messages), w =>
+        {
+            ToolbarRenderer.Write(w, [new ToolbarItem("reload", "Nạp lại", Href: urls.Refresh, Target: "self", Shortcut: "F5")]);
+            FilterRenderer.Write(w, new FilterModel($"flt-{form.RuntimeName}", urls.Self, (v.Filters ?? []).Select(FilterField).ToList(),
+                urls.Para is null ? null : [("para", urls.Para)]));
+            var rows = v.Rows ?? [];
+            if (v.Total > rows.Count)
+                w.Element("p", $"Đang hiện {rows.Count.ToString("N0", Vi)} trên {v.Total.ToString("N0", Vi)} dòng. Thu hẹp bộ lọc để xem phần còn lại.").Line();
+            GridRenderer.Write(w, Grid("T0", v.Columns ?? [], rows, v.Keys ?? [], v.KeyField, v.Total, v.Sums,
+                v.CanOpenRecord ? urls.Record : null));
+        });
+    }
+
+    public static string Record(RecordView v, string title, string? menuId, ScreenUrls urls, string antiforgeryField, string antiforgeryToken)
+    {
+        var form = v.Form!;
+        var key = v.Key!;
+        var recordId = "rec-" + Slug(form.RuntimeName);
+        return ScreenRenderer.Render(new ScreenModel(form.FormName, FormTypes.Edit, $"{form.RuntimeName}:{key}", $"{title} — {key}",
+            Mode: "view", Para: urls.Para, MenuId: menuId, RefreshSrc: urls.Record(key)), w =>
+        {
+            ToolbarRenderer.Write(w, [new ToolbarItem("reload", "Nạp lại", Href: urls.Record(key), Target: "self", Shortcut: "F5")]);
+            // Chế độ xem: mọi ô readonly / disabled (chuẩn 9). Web chưa ghi (M4) nên action là chính URL chứng từ.
+            RecordRenderer.Write(w, new RecordModel(recordId, urls.Record(key), antiforgeryField, antiforgeryToken,
+                (v.Tabs ?? []).Select(t => new FieldsetModel(t.Title, t.Fields.Select(ViewField).ToList(), t.Id)).ToList(), v.KeyField, key));
+            TabsRenderer.Write(w, (v.Details ?? []).Select(d => new TabPanelModel(d.Id, d.Title, urls.Detail(key, d.Id))).ToList());
+        });
+    }
+
+    /// <summary>Nội dung một tab chi tiết nạp lười: chỉ có lưới.</summary>
+    public static string Detail(DetailView v, string title) =>
+        HtmlPage.Render(title, w => GridRenderer.Write(w, Grid(v.SlotId ?? "T1", v.Columns ?? [], v.Rows ?? [], v.Keys ?? [], v.KeyField, v.Total, v.Sums, null)));
+
+    /// <summary>Lỗi cấu hình form (SQL không chạy được trên web chỉ đọc): vẫn là screen để FE mở thành tab.</summary>
+    public static string ConfigError(string formName, string? para, string title, string note) =>
+        ScreenRenderer.Render(new ScreenModel(formName, FormTypes.Custom, string.IsNullOrEmpty(para) ? formName : $"{formName}_{para}", title,
+            Para: string.IsNullOrEmpty(para) ? null : para), w =>
+        {
+            w.Element("p", "Màn hình này chưa mở được trên bản web vì cấu hình form có phần web chưa hỗ trợ. Vui lòng dùng ERP WinForms.").Line();
+            w.Element("p", note).Line();
+        });
+
+    private static GridModel Grid(string id, IReadOnlyList<ViewColumn> columns, IReadOnlyList<object?[]> rows, IReadOnlyList<string> keys,
+        string? keyField, int total, IReadOnlyDictionary<string, decimal>? sums, Func<string, string>? recordUrl)
+    {
+        var keyColumn = keyField is null ? -1 : columns.ToList().FindIndex(c => c.Field.Equals(keyField, StringComparison.OrdinalIgnoreCase) && !c.Hidden);
+        var gridColumns = columns.Select((c, i) => new GridColumn(c.Field, c.Title, recordUrl is not null && i == keyColumn ? "link" : c.Type, c.Width,
+            Decimals: c.Decimals, Hidden: c.Hidden, Sum: c.Sum ? "sum" : null)).ToList();
+        var gridRows = rows.Select((r, ri) => new GridRow(keys.Count > ri ? keys[ri] : null, columns.Select((c, ci) =>
+        {
+            var cell = Cell(c, r[ci]);
+            return recordUrl is not null && ci == keyColumn && keys.Count > ri && keys[ri].Length > 0
+                ? cell with { Href = recordUrl(keys[ri]), LinkTarget = "tab" } : cell;
+        }).ToList())).ToList();
+        var totals = sums?.Where(s => columns.Any(c => c.Field.Equals(s.Key, StringComparison.OrdinalIgnoreCase)))
+            .ToDictionary(s => s.Key, s => Number(s.Value, columns.First(c => c.Field.Equals(s.Key, StringComparison.OrdinalIgnoreCase)).Decimals),
+                StringComparer.OrdinalIgnoreCase);
+        return new GridModel(id, gridColumns, gridRows, keyField is null || keys.Count == 0 ? null : keyField, Selectable: "single",
+            TotalRows: total, Totals: totals);
+    }
+
+    /// <summary>Giá trị → (chữ hiển thị, giá trị máy bất biến) theo chuẩn 2.5.</summary>
+    internal static GridCell Cell(ViewColumn c, object? v) => v switch
+    {
+        null => new GridCell(null),
+        bool b => GridCell.Bool(b),
+        DateTime d when c.Type == "datetime" => new GridCell(d.ToString("dd/MM/yyyy HH:mm", Vi), d.ToString("yyyy-MM-ddTHH:mm:ss", CultureInfo.InvariantCulture)),
+        DateTime d => new GridCell(d.ToString("dd/MM/yyyy", Vi), d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)),
+        DateTimeOffset d => new GridCell(d.ToString("dd/MM/yyyy HH:mm", Vi), d.ToString("yyyy-MM-ddTHH:mm:ss", CultureInfo.InvariantCulture)),
+        decimal or double or float or int or long or short or byte when c.Type != "text" => Number(Convert.ToDecimal(v, CultureInfo.InvariantCulture), c.Decimals),
+        IFormattable f => new GridCell(f.ToString(null, CultureInfo.InvariantCulture)),
+        _ => new GridCell(v.ToString()),
+    };
+
+    private static GridCell Number(decimal d, int? decimals)
+    {
+        var fmt = "#,##0" + (decimals is > 0 ? "." + new string('#', decimals.Value) : "");
+        return new GridCell(d.ToString(fmt, Vi), d.ToString("0.############", CultureInfo.InvariantCulture));
+    }
+
+    private static FieldModel FilterField(ViewFilter f) => f.Control switch
+    {
+        "date" => new FieldModel(f.Name, f.Caption, "date", f.Value, Span: 6),
+        "select" => new FieldModel(f.Name, f.Caption, "select", f.Value ?? "", Span: 8, Options: f.Options),
+        "checkbox" => new FieldModel(f.Name, f.Caption, "checkbox", f.Value == "true" ? "true" : "false", Span: 6),
+        "number" => new FieldModel(f.Name, f.Caption, "number", f.Value, Span: 6),
+        "search" => new FieldModel(f.Name, f.Caption, "search", f.Value, Span: 14, Placeholder: "Nhập mã, số chứng từ…"),
+        _ => new FieldModel(f.Name, f.Caption, "text", f.Value, Span: 8),
+    };
+
+    private static FieldModel ViewField(ViewField f)
+    {
+        var span = Math.Clamp(f.Span, 1, 40);
+        return f.Control switch
+        {
+            "checkbox" => new FieldModel(f.Field, f.Caption, "checkbox", f.Value is true ? "true" : "false", span, ReadOnly: true, RowStart: f.RowStart),
+            "date" or "datetime" => new FieldModel(f.Field, f.Caption, f.Control, f.Value is DateTime d
+                ? d.ToString(f.Control == "date" ? "yyyy-MM-dd" : "yyyy-MM-ddTHH:mm", CultureInfo.InvariantCulture) : null, span, ReadOnly: true, RowStart: f.RowStart),
+            "number" or "money" or "quantity" or "percent" => new FieldModel(f.Field, f.Caption, f.Control,
+                f.Value is null ? null : Convert.ToDecimal(f.Value, CultureInfo.InvariantCulture).ToString("0.############", CultureInfo.InvariantCulture),
+                span, ReadOnly: true, RowStart: f.RowStart, Decimals: f.Decimals),
+            "label" => new FieldModel(f.Field, f.Caption, "label", Display: Text(f.Value), Span: span, RowStart: f.RowStart),
+            "textarea" => new FieldModel(f.Field, f.Caption, "textarea", Text(f.Value), span, ReadOnly: true, Rows: Math.Max(f.Rows, 2), RowStart: f.RowStart),
+            _ => new FieldModel(f.Field, f.Caption, "text", Text(f.Value), span, ReadOnly: true, RowStart: f.RowStart),
+        };
+    }
+
+    private static string? Text(object? v) => v switch
+    {
+        null => null,
+        DateTime d => d.ToString("dd/MM/yyyy HH:mm", Vi),
+        IFormattable f => f.ToString(null, CultureInfo.InvariantCulture),
+        _ => v.ToString(),
+    };
+
+    private static string FormType(string t) => t switch
+    {
+        "LISTEDIT" or "LISTEDIT2" => FormTypes.ListEdit,
+        _ => FormTypes.List,
+    };
+
+    private static string Slug(string s) => new(s.Select(ch => char.IsAsciiLetterOrDigit(ch) ? ch : '-').ToArray());
+}

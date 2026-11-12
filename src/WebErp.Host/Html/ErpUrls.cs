@@ -20,6 +20,17 @@ public sealed class ErpUrls(string pathBase) : IMenuUrls
         _ => Screen("screens", node.Entry.FormName!, node.Entry.Para),
     };
 
+    /// <summary>Danh sách / chứng từ / tab chi tiết của một màn metadata (hướng dẫn BE mục 3).</summary>
+    public string Screen(string formName, string? para) => Screen("screens", formName, para);
+
+    public string Record(string formName, string? para, string key) =>
+        $"{pathBase}/erp/screens/{Uri.EscapeDataString(formName)}/{Uri.EscapeDataString(key)}" + ParaQuery(para);
+
+    public string Detail(string formName, string? para, string key, string slot) =>
+        $"{pathBase}/erp/screens/{Uri.EscapeDataString(formName)}/{Uri.EscapeDataString(key)}/tabs/{Uri.EscapeDataString(slot)}" + ParaQuery(para);
+
+    private static string ParaQuery(string? para) => string.IsNullOrEmpty(para) ? "" : "?para=" + Uri.EscapeDataString(para);
+
     private string Screen(string kind, string formName, string? para) =>
         $"{pathBase}/erp/{kind}/{Uri.EscapeDataString(formName)}" + (string.IsNullOrEmpty(para) ? "" : "?para=" + Uri.EscapeDataString(para));
 

@@ -2,12 +2,17 @@ using WebErp.Core.Menu;
 using WebErp.Core.Messages;
 using WebErp.Html.Roles;
 using WebErp.Html.Screens;
+using WebErp.Tests.Host;
 
 namespace WebErp.ContractTests;
 
 /// <summary>Mọi kiểu trang BE sinh ra ở M1 phải qua validator ERP-HTML của FE: 0 lỗi (AGENTS.md của repo FE).</summary>
 public sealed class RendererContractTests(FrontendValidator validator) : IClassFixture<FrontendValidator>
 {
+    private static readonly ScreenUrls MetaUrls = new("/erp/screens/AP_PurposeRequestListFrm", null,
+        k => "/erp/screens/AP_PurposeRequestListFrm/" + Uri.EscapeDataString(k),
+        (k, s) => $"/erp/screens/AP_PurposeRequestListFrm/{Uri.EscapeDataString(k)}/tabs/{s}", "/erp/screens/AP_PurposeRequestListFrm?FromDate=2026-10-13");
+
     public static TheoryData<string> Pages()
     {
         var menu = MenuTree.Build([
@@ -32,6 +37,10 @@ public sealed class RendererContractTests(FrontendValidator validator) : IClassF
             BasicScreens.NotAvailable("CS_ReceiptFrm", "Bank", false, "Phiếu thu ngân hàng"),
             BasicScreens.NotAvailable("CS_CashBookReport", null, true),
             BasicScreens.Error("Lỗi", ErpMessage.Error("Có lỗi khi xử lý yêu cầu. Mã lỗi: 00-abc")),
+            MetaScreens.List(SampleScreens.List(), "Đề nghị mua hàng", "05011", MetaUrls),
+            MetaScreens.Record(SampleScreens.Record("PO/001"), "Đề nghị mua hàng", "05011", MetaUrls, "__RequestVerificationToken", "t"),
+            MetaScreens.Detail(SampleScreens.Detail(), "Hàng hóa đề nghị"),
+            MetaScreens.ConfigError("BAD_ConfigFrm", null, "Form cấu hình xấu", "Đoạn SQL 'T0.FTX' trong cấu hình form không chạy được."),
         };
     }
 

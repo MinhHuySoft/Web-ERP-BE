@@ -16,9 +16,9 @@ WebErp.Admin ┘                ├─► WebErp.Config ─┼─► WebErp.Core
 
 | Project | Có gì (M1) |
 |---|---|
-| `src/WebErp.Core` | `Tenancy/` (công ty, kiểm tên, `ITenantStore`), `Auth/` (`LegacyPassword` — hash kiểu cũ, `IErpUsers`), `Menu/` (`MenuTree`, `IErpMenu`), `Messages/`, `Errors/` |
-| `src/WebErp.Html` | `HtmlWriter` (tự encode, cấm `class`/`style`/`on*`), `HtmlPage`, `Roles/` (mỗi vai trò `data-erp` một renderer), `Screens/` (trang chủ, màn chưa có, trang lỗi) |
-| `src/WebErp.Erp` | `Connection/` (mở kết nối theo công ty, timeout), `Security/ErpUsers` (`SY_User`), `Menu/ErpMenu` (`<Module>_GetUserMenuFnc`), `Diagnostics/ErpProbe` |
+| `src/WebErp.Core` | `Tenancy/` (công ty, kiểm tên, `ITenantStore`), `Auth/` (`LegacyPassword` — hash kiểu cũ, `IErpUsers`), `Menu/` (`MenuTree`, `IErpMenu`), `Metadata/` (`FormMeta`/`SlotMeta` đã biên dịch, quyền form, mô hình xem `ListView`/`RecordView`/`DetailView`, `IErpScreens`), `Messages/`, `Errors/` |
+| `src/WebErp.Html` | `HtmlWriter` (tự encode, cấm `class`/`style`/`on*`), `HtmlPage`, `Roles/` (mỗi vai trò `data-erp` một renderer: lọc, lưới có tổng, tab nạp lười…), `Screens/` (trang chủ, màn chưa có, trang lỗi; `MetaScreens`: danh sách / chứng từ / tab chi tiết từ metadata) |
+| `src/WebErp.Erp` | `Connection/` (mở kết nối theo công ty, timeout), `Security/` (`ErpUsers` — `SY_User`; `ErpPermissions` — quyền form như `GetPermission`), `Menu/ErpMenu` (`<Module>_GetUserMenuFnc`), `Metadata/` (đọc + biên dịch `SY_FrmLstTbl`/`SY_FrmCfg`/`SY_FrmFltTbl`/`SY_FmtFldTbl`, cache 5 phút; danh sách form viết tay), `Query/SqlTemplate` (kiểm đoạn SQL metadata chỉ đọc, token → tham số), `Screens/` (`SlotQuery` dựng SELECT của slot, `ErpScreens` — chạy trong giao dịch luôn rollback), `Diagnostics/ErpProbe` |
 | `src/WebErp.Config` | `ConfigDatabase` (SQLite, Host chỉ đọc), `ConfigMigrator` (chạy `db/config/*.sql`), `SqliteTenantStore` (bản chụp + nạp lại theo `config_meta.version`), `ConfigWriter` (chỉ Admin), `SecretProtector`, `DataProtectionSetup` |
 | `src/WebErp.Host` | `Program.cs`, `Middleware/` (công ty theo host, lỗi → ERP-HTML, `/config.js`, header bảo mật), `Auth/` (cookie tự chứa, kiểm cookie, chống dò mật khẩu, menu cache), `Endpoints/` (`/erp/login`, `/erp/logout`, `/erp/session`, `/erp/menu`, `/erp/home`, `/erp/screens/*`, `/erp/reports/*`, `/health`) |
 | `src/WebErp.Web` | `HtmlResults`, `ErrorHandling`, `SecurityHeaders`, `FrontendConfig` (`/config.js` + FE cùng origin) |
