@@ -9,7 +9,8 @@
 #>
 param(
     [Parameter(Mandatory = $true)][string]$Destination,
-    [string]$Root = 'D:\WebErp',
+    # Thư mục dữ liệu: biến môi trường cấp máy WebErp__Root, mặc định C:\WebErp.
+    [string]$Root = $(if ($env:WebErp__Root) { $env:WebErp__Root } else { 'C:\WebErp' }),
     [int]$KeepDays = 30
 )
 $ErrorActionPreference = 'Stop'
