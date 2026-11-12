@@ -23,7 +23,8 @@
       "MDL": "DocumentID",
       "DCP": "Chi tiết chi tiền",
       "HDE": "DocumentID",
-      "SUM": "SourceAmount;Amount;VATAmount;TotalAmount"
+      "SUM": "SourceAmount;Amount;VATAmount;TotalAmount",
+      "GD2": "AccountID;Memo;ObjectID;SourceAmount;Amount;VATID;VATPercent;VATAmount;TotalAmount"
     },
     "T2": {
       "TN": "CS_VATInvoiceTbl",

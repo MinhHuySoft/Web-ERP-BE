@@ -41,6 +41,51 @@ public sealed class RealTenantSmokeTests(FrontendValidator validator) : IClassFi
         var lines = new List<string>();
         foreach (var n in names!.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
+            if (n.StartsWith("fmt:", StringComparison.Ordinal))
+            {
+                var fields = n[4..].Split(';');
+                var rows = await c.QueryAsync<(string, string?, string?, string?)>(
+                    "SELECT FieldName, FormName, FormatID, CaptionVN FROM dbo.SY_FmtFldTbl WHERE FieldName IN @fields ORDER BY FieldName, FormName", new { fields });
+                lines.Add($"== {n}:");
+                lines.AddRange(rows.Select(r => $"   {r.Item1} [{r.Item2}] {r.Item3} = {r.Item4}"));
+                continue;
+            }
+            if (n.StartsWith("cfgall:", StringComparison.Ordinal))
+            {
+                var rows = await c.QueryAsync<(string, string, string, string, string)>(
+                    "SELECT FID, KeyID, COALESCE(SubID,''), LEFT(REPLACE(REPLACE(KeyValue, CHAR(13), ' '), CHAR(10), ' '), 160), COALESCE(LEFT(SubValue, 40),'') FROM dbo.SY_FrmCfg " +
+                    "WHERE FID = @f AND COALESCE(KeyValue,'')<>'' AND KeyID NOT LIKE 'LY%' ORDER BY KeyID, SubID", new { f = n[7..] });
+                lines.Add($"== {n}:");
+                lines.AddRange(rows.Select(r => $"   {r.Item2}.{r.Item3} = {r.Item4} | {r.Item5}"));
+                continue;
+            }
+            if (n.StartsWith("ctr:", StringComparison.Ordinal))
+            {
+                var ctrCols = string.Join(", ", await c.QueryAsync<string>("SELECT name FROM sys.columns WHERE object_id = OBJECT_ID('dbo.SY_FrmCtrTbl') ORDER BY column_id"));
+                lines.Add($"== SY_FrmCtrTbl cột: {ctrCols}");
+                var rows = await c.QueryAsync("SELECT TOP 40 * FROM dbo.SY_FrmCtrTbl WHERE FormID = @f", new { f = n[4..] });
+                foreach (IDictionary<string, object?> r in rows) lines.Add("   " + string.Join(" | ", r.Where(x => x.Value is not null and not DBNull).Select(x => $"{x.Key}={x.Value}")));
+                continue;
+            }
+            if (n.StartsWith("drdw:", StringComparison.Ordinal))
+            {
+                var rows = await c.QueryAsync<(string, string, string, string, string)>(
+                    "SELECT COALESCE(GridName,''), COALESCE(ColumnID,''), COALESCE(Caption,''), COALESCE(ValueColumn,''), COALESCE(DisplayColumn,'') FROM dbo.SY_FrmDrdwTbl " +
+                    "WHERE FormID = @f ORDER BY GridName, ColumnID", new { f = n[5..] });
+                lines.Add($"== {n}:");
+                lines.AddRange(rows.Select(r => $"   [{r.Item1}] {r.Item2} caption='{r.Item3}' value={r.Item4} display={r.Item5}"));
+                continue;
+            }
+            if (n.StartsWith("cfgfield:", StringComparison.Ordinal))
+            {
+                var parts = n[9..].Split(':');
+                var rows = await c.QueryAsync<(string, string, string, string)>(
+                    "SELECT KeyID, COALESCE(SubID,''), LEFT(COALESCE(KeyValue,''), 200), COALESCE(LEFT(SubValue, 60),'') FROM dbo.SY_FrmCfg " +
+                    "WHERE FID = @f AND (SubID = @s OR SubID = 'Fld' + @s OR KeyValue LIKE '%' + @s + '%') ORDER BY KeyID, SubID", new { f = parts[0], s = parts[1] });
+                lines.Add($"== {n}:");
+                lines.AddRange(rows.Select(r => $"   {r.Item1}.{r.Item2} = {r.Item3} | {r.Item4}"));
+                continue;
+            }
             if (n.StartsWith("form:", StringComparison.Ordinal))
             {
                 var rows = await c.QueryAsync<(string, string, string, string)>(

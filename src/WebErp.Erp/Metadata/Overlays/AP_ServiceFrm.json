@@ -14,6 +14,7 @@
       "SO": "DocumentDate desc, DocumentID desc",
       "HDE": "SearchField",
       "SUM": "BaseTotal",
+      "GD2": "DocumentID;DocumentDate;ObjectID;ObjectName;Memo;InvoiceNo;BaseTotal;CurrencyID;Status;StatusName",
       "TN1": "CF_ObjectTbl",
       "FKA1": "ObjectID",
       "FKB1": "ObjectID",

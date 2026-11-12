@@ -13,13 +13,22 @@ namespace WebErp.Erp.Metadata;
 public sealed record FieldFormat(string? Caption, string? FormatId, int? Decimals, string? Kind);
 
 /// <summary>Bảng tiêu đề + định dạng của cả công ty (khoảng vài nghìn dòng, đọc một lần rồi cache).</summary>
-public sealed class FieldFormats(IReadOnlyDictionary<string, FieldFormat> global, IReadOnlyDictionary<string, FieldFormat> perForm)
+/// <param name="any">Dòng đầu tiên (theo AutoID) của mỗi cột, bất kể form: <c>Functions.LangField</c> của WinForms tra theo tên cột,
+/// không xét FormName, nên một cột chỉ được khai báo dưới form khác vẫn có tiêu đề tiếng Việt.</param>
+public sealed class FieldFormats(IReadOnlyDictionary<string, FieldFormat> global, IReadOnlyDictionary<string, FieldFormat> perForm,
+    IReadOnlyDictionary<string, FieldFormat> any)
 {
-    public static readonly FieldFormats Empty = new(new Dictionary<string, FieldFormat>(), new Dictionary<string, FieldFormat>());
+    public static readonly FieldFormats Empty = new(new Dictionary<string, FieldFormat>(), new Dictionary<string, FieldFormat>(), new Dictionary<string, FieldFormat>());
 
-    /// <summary>Theo form trước (khớp tên form chạy hoặc tên form gốc), rồi toàn cục.</summary>
+    /// <summary>Theo form đang mở trước (tên form chạy hoặc tên form gốc), rồi dòng chung, rồi dòng bất kỳ của cột đó (như WinForms).</summary>
     public FieldFormat? Get(string field, string runtimeName, string formName) =>
-        perForm.GetValueOrDefault($"{runtimeName}|{field}") ?? perForm.GetValueOrDefault($"{formName}|{field}") ?? global.GetValueOrDefault(field);
+        perForm.GetValueOrDefault($"{runtimeName}|{field}") ?? perForm.GetValueOrDefault($"{formName}|{field}")
+        ?? global.GetValueOrDefault(field) ?? any.GetValueOrDefault(field);
+
+    /// <summary>Tiêu đề đầu tiên khác rỗng theo cùng thứ tự (dòng chung có thể chỉ khai báo định dạng, không có tiêu đề).</summary>
+    public string? Caption(string field, string runtimeName, string formName) =>
+        perForm.GetValueOrDefault($"{runtimeName}|{field}")?.Caption ?? perForm.GetValueOrDefault($"{formName}|{field}")?.Caption
+        ?? global.GetValueOrDefault(field)?.Caption ?? any.GetValueOrDefault(field)?.Caption;
 }
 
 /// <summary>
@@ -50,10 +59,23 @@ public sealed class ErpMetadata(ErpConnectionFactory connections, TimeProvider t
                 cfg.AddRange(overlay.Rows);
             }
             if (lst is null && cfg.Count == 0) return (FormMeta?)null;
+            // Tiêu đề riêng của ô trên form (SY_FrmCtrTbl, màn "Ngôn ngữ form" của WinForms): ParentCtlName kết thúc bằng Fld<Cột>,
+            // CtlName "C" = nhãn. Bảng có thể không có ở DB khác nên kiểm trước.
+            var ctr = new List<FrmCfgRow>();
+            if (await c.ExecuteScalarAsync<int>(new CommandDefinition("SELECT CASE WHEN OBJECT_ID('dbo.SY_FrmCtrTbl') IS NULL THEN 0 ELSE 1 END", cancellationToken: ct)) == 1)
+            {
+                foreach (var (path, caption) in await c.QueryAsync<(string, string)>(Cmd(
+                             "SELECT ParentCtlName, CaptionVN FROM dbo.SY_FrmCtrTbl WHERE FormID IN (@f, @g) AND CtlName = 'C' " +
+                             "AND COALESCE(IsDisable,0) = 0 AND COALESCE(CaptionVN,'') <> '' ORDER BY CASE WHEN FormID = @f THEN 0 ELSE 1 END", runtimeName, ct, formName)))
+                {
+                    var last = path?.Split(';').LastOrDefault()?.Trim() ?? "";
+                    if (last.StartsWith("Fld", StringComparison.OrdinalIgnoreCase) && last.Length > 3) ctr.Add(new FrmCfgRow("C", last[3..], caption.Trim(), "CV"));
+                }
+            }
             var flt = (await c.QueryAsync<FrmFltRow>(Cmd(
                 "SELECT KeyID,ColumnID,Caption,Type,Source,ValueColumn,DisplayColumn,Operator,WhereString,DefaultValue,IsDisable " +
                 "FROM dbo.SY_FrmFltTbl WHERE FormID=@f ORDER BY KeyID,UserAutoID", runtimeName, ct))).ToList();
-            return MetadataCompiler.Compile(formName, runtimeName, lst, cfg, flt);
+            return MetadataCompiler.Compile(formName, runtimeName, lst, [.. cfg, .. ctr], flt);
         });
 
     public async Task<FieldFormats> GetFormatsAsync(Tenant tenant, CancellationToken ct) =>
@@ -62,17 +84,19 @@ public sealed class ErpMetadata(ErpConnectionFactory connections, TimeProvider t
             await using var c = await Open(tenant, ct);
             var rows = await c.QueryAsync<(string FieldName, string? FormName, string? CaptionVN, string? FormatID, int? NumberDecimal, string? Type)>(
                 new CommandDefinition("SELECT A.FieldName,A.FormName,A.CaptionVN,A.FormatID,B.NumberDecimal,B.Type FROM dbo.SY_FmtFldTbl A " +
-                                      "LEFT JOIN dbo.SY_FmatTbl B ON B.FormatID=A.FormatID WHERE A.FieldName IS NOT NULL",
+                                      "LEFT JOIN dbo.SY_FmatTbl B ON B.FormatID=A.FormatID WHERE A.FieldName IS NOT NULL ORDER BY A.AutoID",
                     commandTimeout: connections.Options.CommandTimeoutSeconds, cancellationToken: ct));
             var global = new Dictionary<string, FieldFormat>(StringComparer.OrdinalIgnoreCase);
             var perForm = new Dictionary<string, FieldFormat>(StringComparer.OrdinalIgnoreCase);
+            var any = new Dictionary<string, FieldFormat>(StringComparer.OrdinalIgnoreCase);
             foreach (var r in rows)
             {
                 var f = new FieldFormat(Blank(r.CaptionVN), Blank(r.FormatID), r.NumberDecimal, Blank(r.Type));
                 if (string.IsNullOrWhiteSpace(r.FormName)) global.TryAdd(r.FieldName.Trim(), f);
                 else perForm.TryAdd($"{r.FormName.Trim()}|{r.FieldName.Trim()}", f);
+                if (f.Caption is not null) any.TryAdd(r.FieldName.Trim(), f);
             }
-            return new FieldFormats(global, perForm);
+            return new FieldFormats(global, perForm, any);
         });
 
     /// <summary>Cột của bảng/view (để biết có <c>UserCreate</c>, <c>BranchID</c>, cột ngày… không). Rỗng nếu không phải tên bảng/view.</summary>
@@ -141,8 +165,9 @@ public sealed class ErpMetadata(ErpConnectionFactory connections, TimeProvider t
 
     private Task<SqlConnection> Open(Tenant tenant, CancellationToken ct) => connections.OpenAsync(tenant, ct);
 
-    private CommandDefinition Cmd(string sql, string form, CancellationToken ct) =>
-        new(sql, new { f = new DbString { Value = form, IsAnsi = true, Length = 250 } }, commandTimeout: connections.Options.CommandTimeoutSeconds, cancellationToken: ct);
+    private CommandDefinition Cmd(string sql, string form, CancellationToken ct, string? form2 = null) =>
+        new(sql, new { f = new DbString { Value = form, IsAnsi = true, Length = 250 }, g = new DbString { Value = form2 ?? form, IsAnsi = true, Length = 250 } },
+            commandTimeout: connections.Options.CommandTimeoutSeconds, cancellationToken: ct);
 
     private static string? Blank(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
 }

@@ -14,6 +14,7 @@
       "SO": "DocumentDate desc, DocumentID desc",
       "HDE": "SearchField",
       "SUM": "BaseTotal",
+      "GD2": "DocumentID;DocumentDate;ObjectID;ObjectName;Memo;InvoiceNo;BaseTotal;CurrencyID;Status;StatusName",
       "TN1": "CF_ObjectTbl",
       "FKA1": "ObjectID",
       "FKB1": "ObjectID",
@@ -29,7 +30,8 @@
       "TN1": "CF_ItemTbl",
       "FKA1": "ItemID",
       "FKB1": "ItemID",
-      "SE1": "A.ItemName, A.Unit, A.Unit2"
+      "SE1": "A.ItemName, A.Unit, A.Unit2",
+      "GD2": "ItemID;ItemName;Unit;StoreHouseID;Lot;ExpireDate;Quantity;UnitPrice;Amount;VATPercent;VATAmount;TotalAmount;Notes"
     }
   }
 }
