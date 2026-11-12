@@ -33,6 +33,9 @@ public sealed class ScreenReadTests(FakeErpDatabase db) : IClassFixture<FakeErpD
         Assert.Equal(["PurchaseRequestID", "PurchaseDate", "StatusID"], v.Columns!.Take(3).Select(c => c.Field));
         Assert.Equal("Ngày đề nghị", v.Columns!.Single(c => c.Field == "PurchaseDate").Title); // F0 đè SY_FmtFldTbl
         Assert.True(v.Columns!.Single(c => c.Field == "RateExchange").Hidden);
+        // Có GD2: chỉ hiện cột GD2 + khóa + cột tổng; cột khác ẩn sẵn nhưng vẫn có trong lưới để bật lại.
+        Assert.Equal(["PurchaseRequestID", "PurchaseDate", "StatusID"], v.Columns!.Where(c => !c.Hidden).Select(c => c.Field));
+        Assert.True(v.Columns!.Single(c => c.Field == "Notes").Hidden);
         // ketoan có isHideAmount: cột tiền (ACP) bị loại khỏi dữ liệu, không chỉ ẩn (QĐ-03 ngoại lệ 5).
         Assert.DoesNotContain(v.Columns!, c => c.Field == "Price");
         Assert.True(v.CanOpenRecord);
@@ -48,8 +51,9 @@ public sealed class ScreenReadTests(FakeErpDatabase db) : IClassFixture<FakeErpD
         var all = await Screens().OpenListAsync(Req("Admin", null, "AP_PurposeRequestListFrm",
             new() { ["FromDate"] = "2000-01-01", ["BranchID"] = "" }), CancellationToken.None);
         Assert.Equal(["PO/004", "PO/003", "PO/002", "PO/001"], all.Keys!); // SO = PurchaseRequestID Desc
+        Assert.True(all.Columns!.Single(c => c.Field == "UserCreate").Hidden); // như GridX.SetGrid: cột người tạo/sửa ẩn sẵn
         var price = all.Columns!.Single(c => c.Field == "Price");
-        Assert.Equal(("money", true), (price.Type, price.Sum));
+        Assert.Equal(("money", true, false), (price.Type, price.Sum, price.Hidden)); // cột tổng vẫn hiện dù không có trong GD2
         Assert.Equal(10000m, all.Sums!["Price"]);
 
         var hn = await Screens().OpenListAsync(Req("Admin", null, "AP_PurposeRequestListFrm",

@@ -8,7 +8,8 @@ namespace WebErp.Core.Metadata;
 /// <param name="RuntimeName"><c>FormName</c> hoặc <c>FormName_Para</c>: khóa của <c>SY_FrmCfg.FID</c> và của quyền.</param>
 /// <param name="FormType"><c>LIST</c>, <c>LISTEDIT</c>, <c>LISTEDIT2</c>, <c>EDIT</c>… (rỗng ⇒ <c>LIST</c>).</param>
 /// <param name="Settings">Key cấp form (SubID rỗng): <c>SP</c>, <c>SPA</c>, <c>SPA2</c>, <c>SPA3</c>, <c>DFP</c>, <c>T1V</c>, <c>TPV1</c>…</param>
-/// <param name="Captions">Đè tiêu đề cột theo form: khóa <c>F0:Cột</c> (T0) / <c>F1:Cột</c> (T1)…, từ <c>SY_FrmCfg</c> KeyID F0..F9, SubValue CV.</param>
+/// <param name="Captions">Đè tiêu đề cột theo form: khóa <c>F0:Cột</c> (T0) / <c>F1:Cột</c> (T1)…, từ <c>SY_FrmCfg</c> KeyID F0..F9, SubValue CV;
+/// khóa <c>C:Cột</c> = nhãn ô chứng từ của form (<c>SY_FrmCtrTbl</c>, ParentCtlName …;Fld&lt;Cột&gt;).</param>
 public sealed record FormMeta(
     string FormName,
     string RuntimeName,

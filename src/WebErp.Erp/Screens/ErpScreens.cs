@@ -24,7 +24,11 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
     public const int DetailMax = 2000;
     public const int OptionsMax = 500;
 
-    private static readonly string[] SystemHidden = ["UserAutoID", "UID", "ParentID", "isSyn"];
+    /// <summary>
+    /// Cột lưới WinForms luôn ẩn khi dựng lưới (<c>GridX.SetGrid</c>, ReBuildColumn): khóa kỹ thuật và cột người/ngày tạo, sửa.
+    /// Web để <c>data-hidden</c> (người dùng vẫn bật lại được bằng nút Cột).
+    /// </summary>
+    private static readonly string[] SystemHidden = ["UserAutoID", "UID", "ParentID", "isSyn", "UserCreate", "UserUpdate", "DateCreate", "DateUpdate"];
     private static readonly string[] DateColumns = ["DocumentDate", "PeriodID", "QuarterID", "Quy", "YearID", "Nam"];
 
     [GeneratedRegex("^[A-Za-z_][A-Za-z0-9_]{0,99}$")]
@@ -230,7 +234,7 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
             if (f.Type is not (0 or 1 or 2 or 3 or 5)) continue;
             var name = Identifier().IsMatch(f.Column) ? f.Column : $"flt{f.Key}";
             var value = ctx.Req.Query.TryGetValue(name, out var v) ? v.Trim() : f.DefaultValue is null ? "" : ctx.Expand(f.DefaultValue);
-            var caption = f.Caption ?? ctx.Formats.Get(f.Column, form.RuntimeName, form.FormName)?.Caption ?? f.Column;
+            var caption = f.Caption ?? ctx.Formats.Caption(f.Column, form.RuntimeName, form.FormName) ?? f.Column;
             IReadOnlyList<(string, string)>? options = null;
             if (f.Type == 3)
             {
@@ -347,7 +351,7 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
                     if (l.ControlType is 22 or 23 or 24 or 26 or 30) continue; // nút, nhóm, HTML: không có ở chế độ xem
                     if (l.VisiblePermiss == 7 && !ctx.Perm.SeesAll || l.VisiblePermiss == 9 && !ctx.Perm.Admin) continue;
                     if (removed.Contains(l.Field) || !index.TryGetValue(l.Field, out var i)) continue;
-                    var caption = l.Caption ?? Title(ctx, "F0", l.Field);
+                    var caption = l.Caption ?? ctx.Form.Captions.GetValueOrDefault($"C:{l.Field}") ?? Title(ctx, "F0", l.Field);
                     fields.Add(Field(ctx, l.Field, caption, l.ControlType, master.Types[i], row[i], l.Span, l.Rows, l.RowStart));
                 }
                 var k = Array.IndexOf(order, g.Key);
@@ -364,7 +368,7 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
             {
                 var n = master.Names[i];
                 if (removed.Contains(n) || hidden.Contains(n) || master.Types[i] == typeof(byte[])) continue;
-                fields.Add(Field(ctx, n, Title(ctx, "F0", n), 0, master.Types[i], row[i], 10, 1, false));
+                fields.Add(Field(ctx, n, ctx.Form.Captions.GetValueOrDefault($"C:{n}") ?? Title(ctx, "F0", n), 0, master.Types[i], row[i], 10, 1, false));
             }
             tabs.Add(new ViewTab("1", "Thông tin chung", fields));
         }
@@ -411,22 +415,25 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
         var hidden = new HashSet<string>(slot.Hidden.Concat(SystemHidden), StringComparer.OrdinalIgnoreCase);
         var sum = new HashSet<string>(slot.SumColumns, StringComparer.OrdinalIgnoreCase);
         var amount = new HashSet<string>(slot.AmountColumns, StringComparer.OrdinalIgnoreCase);
-        var order = slot.Order.Select(o => Array.FindIndex(names, n => n.Equals(o, StringComparison.OrdinalIgnoreCase))).Where(i => i >= 0)
-            .Concat(Enumerable.Range(0, names.Length)).Distinct();
+        var gd2 = slot.Order.Select(o => Array.FindIndex(names, n => n.Equals(o, StringComparison.OrdinalIgnoreCase))).Where(i => i >= 0).ToList();
+        // Bộ cột mặc định của web (khác WinForms, nơi GD2 chỉ sắp thứ tự và bộ cột gọn nằm trong tệp .dat của từng máy): có GD2 thì
+        // chỉ hiện các cột GD2 + khóa + cột có tổng (SUM); cột khác ẩn sẵn (data-hidden), người dùng bật lại bằng nút "Cột".
+        var shown = gd2.Count == 0 ? null
+            : new HashSet<string>(gd2.Select(i => names[i]).Append(slot.PrimaryKey).Concat(slot.SumColumns), StringComparer.OrdinalIgnoreCase);
         var result = new List<(int, ViewColumn)>();
-        foreach (var i in order)
+        foreach (var i in gd2.Concat(Enumerable.Range(0, names.Length)).Distinct())
         {
             var n = names[i];
             if (removed.Contains(n) || types[i] == typeof(byte[])) continue;
             var (kind, decimals) = Kind(ctx, n, types[i], amount.Contains(n));
-            result.Add((i, new ViewColumn(n, Title(ctx, formatKey, n), kind, decimals, hidden.Contains(n),
+            result.Add((i, new ViewColumn(n, Title(ctx, formatKey, n), kind, decimals, hidden.Contains(n) || shown?.Contains(n) == false,
                 sum.Contains(n) && kind is "number" or "money" or "quantity" or "percent")));
         }
         return result;
     }
 
     private static string Title(Ctx ctx, string formatKey, string field) =>
-        ctx.Form.Captions.GetValueOrDefault($"{formatKey}:{field}") ?? ctx.Formats.Get(field, ctx.Form.RuntimeName, ctx.Form.FormName)?.Caption ?? field;
+        ctx.Form.Captions.GetValueOrDefault($"{formatKey}:{field}") ?? ctx.Formats.Caption(field, ctx.Form.RuntimeName, ctx.Form.FormName) ?? field;
 
     /// <summary>Kiểu hiển thị theo kiểu dữ liệu + <c>SY_FmtFldTbl.FormatID</c> (tài liệu 11 §1).</summary>
     private static (string Kind, int? Decimals) Kind(Ctx ctx, string field, Type type, bool amount)

@@ -13,6 +13,7 @@
       "PK": "DocumentID",
       "SO": "DocumentDate desc, DocumentID desc",
       "HDE": "SearchField",
+      "GD2": "DocumentID;DocumentDate;ObjectID;ObjectName;Memo;InvoiceNo;BaseTotal;CurrencyID;Status;StatusName",
       "FTW": "IV_InputTbl.InputType = 'PB'"
     },
     "T1": {
@@ -41,7 +42,8 @@
       "TN1": "CF_ItemTbl",
       "FKA1": "ItemID",
       "FKB1": "ItemID",
-      "SE1": "A.ItemName, A.Unit, A.Unit2"
+      "SE1": "A.ItemName, A.Unit, A.Unit2",
+      "GD2": "ItemID;ItemName;Unit;StoreHouseID;Lot;ExpireDate;Quantity;UnitPrice;Amount;VATPercent;VATAmount;TotalAmount;Notes"
     }
   }
 }

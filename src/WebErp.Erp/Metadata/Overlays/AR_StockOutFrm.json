@@ -13,7 +13,8 @@
       "PK": "DocumentID",
       "SO": "DocumentDate desc, DocumentID desc",
       "HDE": "LinkID;MaTrangThai;SourceID",
-      "SUM": "BaseTotal"
+      "SUM": "BaseTotal",
+      "GD2": "DocumentID;DocumentDate;ObjectID;ObjectName;Memo;InvoiceNo;BaseTotal;CurrencyID;Status;StatusName"
     },
     "T1": {
       "TN": "vIS_OutputDetail",
