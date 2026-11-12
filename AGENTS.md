@@ -32,7 +32,8 @@ dotnet run --project src/WebErp.Host        # http://localhost:5190 — cần d�
   theo tên cột và ghi chú "chưa xác minh".
 - **Chưa ghi bảng ERP** cho tới M4 (`docs/ke-hoach.md`). Khi ghi: chỉ qua `Erp/Save` / `Erp/Actions`, gọi SP / hook ERP, không
   tự `INSERT` / `UPDATE` bảng ERP.
-- Phụ thuộc một chiều: `Host`/`Admin` → `Html`, `Erp`, `Config` → `Core`. `Html` không truy cập DB, `Erp` không sinh HTML.
+- Phụ thuộc một chiều: `Host`/`Admin` → `Web`, `Html`, `Erp`, `Config` → `Core`. `Html` không truy cập DB, `Erp` không sinh HTML.
+- Trang quản trị: thao tác nguy hiểm (chuỗi kết nối, đăng xuất hàng loạt, hằng mật khẩu) phải xác nhận lại bằng mã TOTP.
 - HTML chỉ ghi qua `HtmlWriter` (tự encode, cấm `class` / `style` / `on*` / `script`). Trang mới phải có trong
   `WebErp.ContractTests` và qua `validate.js` của FE: **0 lỗi**.
 - Đổi cách FE–BE trao đổi: sửa repo FE trước (đặc tả + hướng dẫn BE + validator), rồi cập nhật `fe.ref`.

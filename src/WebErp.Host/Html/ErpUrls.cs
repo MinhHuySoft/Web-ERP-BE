@@ -11,6 +11,7 @@ public sealed class ErpUrls(string pathBase) : IMenuUrls
     public string Login => pathBase + "/erp/login";
     public string Logout => pathBase + "/erp/logout";
     public string Home => pathBase + "/erp/home";
+    public string Session => pathBase + "/erp/session";
 
     public string For(MenuNode node) => node.Kind switch
     {

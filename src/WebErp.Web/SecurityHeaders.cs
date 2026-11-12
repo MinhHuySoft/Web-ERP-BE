@@ -1,4 +1,4 @@
-namespace WebErp.Host.Middleware;
+namespace WebErp.Web;
 
 /// <summary>Header bảo mật cơ bản cho mọi response (FE và BE cùng origin).</summary>
 public sealed class SecurityHeaders(RequestDelegate next)

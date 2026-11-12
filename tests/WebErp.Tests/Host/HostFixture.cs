@@ -119,7 +119,7 @@ public sealed class HostFixture : IDisposable
 }
 
 [CollectionDefinition("host")]
-public sealed class HostCollection : ICollectionFixture<HostFixture>;
+public sealed class HostCollection : ICollectionFixture<HostFixture>, ICollectionFixture<WebErp.Tests.Admin.AdminFixture>;
 
 internal static class HttpAssert
 {

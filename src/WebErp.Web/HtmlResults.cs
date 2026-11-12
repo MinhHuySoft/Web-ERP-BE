@@ -3,7 +3,7 @@ using WebErp.Core.Messages;
 using WebErp.Html;
 using WebErp.Html.Screens;
 
-namespace WebErp.Host.Html;
+namespace WebErp.Web;
 
 /// <summary>Trả HTML theo chuẩn ERP-HTML (mục 3.2): kiểu nội dung, <c>X-ERP-Contract</c>, không cache dữ liệu cá nhân.</summary>
 public static class HtmlResults

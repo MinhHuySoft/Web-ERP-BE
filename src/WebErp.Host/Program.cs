@@ -1,6 +1,5 @@
 using System.Net;
 using Microsoft.AspNetCore.HttpOverrides;
-using Microsoft.Extensions.FileProviders;
 using WebErp.Config;
 using WebErp.Core.Auth;
 using WebErp.Core.Menu;
@@ -12,6 +11,7 @@ using WebErp.Host;
 using WebErp.Host.Auth;
 using WebErp.Host.Endpoints;
 using WebErp.Host.Middleware;
+using WebErp.Web;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.ConfigureKestrel(k => k.AddServerHeader = false);
@@ -53,22 +53,11 @@ if (options.Forwarded.Enabled)
 app.UseExceptionHandler(new ExceptionHandlerOptions { ExceptionHandler = ErrorHandling.HandleAsync });
 if (!app.Environment.IsDevelopment()) app.UseHsts();
 app.UseMiddleware<SecurityHeaders>();
-app.UseMiddleware<FrontendConfig>();
 
-// FE cùng origin: tệp tĩnh của repo FE (bản đóng gói nằm ở wwwroot).
-var feDir = string.IsNullOrWhiteSpace(options.FrontendDir)
-    ? app.Environment.WebRootPath
-    : Path.GetFullPath(Path.Combine(app.Environment.ContentRootPath, options.FrontendDir));
-if (!string.IsNullOrEmpty(feDir) && Directory.Exists(feDir))
-{
-    var fe = new PhysicalFileProvider(feDir);
-    app.UseDefaultFiles(new DefaultFilesOptions { FileProvider = fe });
-    app.UseStaticFiles(new StaticFileOptions { FileProvider = fe });
-}
-else
-{
-    app.Logger.LogWarning("Không thấy thư mục FE '{Dir}'. Chỉ phục vụ /erp/* và /health.", feDir);
-}
+// FE cùng origin: /config.js + tệp tĩnh của repo FE (bản đóng gói nằm ở wwwroot).
+var frontend = new FrontendSettings(options.AppName, "/erp/login", "/erp/session", "/erp/menu", "/erp/home");
+if (app.UseWebErpFrontend(frontend, options.FrontendDir) is null)
+    app.Logger.LogWarning("Không thấy thư mục FE. Chỉ phục vụ /erp/* và /health.");
 
 app.UseRouting();
 app.UseMiddleware<TenantResolution>();

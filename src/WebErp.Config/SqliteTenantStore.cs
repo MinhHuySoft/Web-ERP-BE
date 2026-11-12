@@ -14,6 +14,12 @@ public sealed class SqliteTenantStore(ConfigDatabase db, SecretProtector protect
 {
     public static readonly TimeSpan CheckInterval = TimeSpan.FromSeconds(5);
 
+    /// <summary>
+    /// Phiên bản schema tối thiểu Host đọc được. Host không chạy migration (chỉ đọc); trang quản trị chạy migration khi khởi động.
+    /// Bảng thêm ở migration sau (vd <c>setting</c>) thì đọc khi có.
+    /// </summary>
+    public const int HostRequiredVersion = 1;
+
     private readonly SemaphoreSlim _gate = new(1, 1);
     private Snapshot? _snapshot;
     private DateTimeOffset _checkedAt;
@@ -51,10 +57,10 @@ public sealed class SqliteTenantStore(ConfigDatabase db, SecretProtector protect
             if (_snapshot is not null && now - _checkedAt < CheckInterval) return _snapshot;
             using var c = db.OpenReadOnly();
             var schema = ConfigMigrator.CurrentVersion(c);
-            if (schema < ConfigMigrator.RequiredVersion)
-                throw new InvalidOperationException($"Tệp cấu hình ở phiên bản {schema}, cần {ConfigMigrator.RequiredVersion}. Chạy 'WebErp.Admin init'.");
+            if (schema < HostRequiredVersion)
+                throw new InvalidOperationException($"Tệp cấu hình ở phiên bản {schema}, cần {HostRequiredVersion}. Mở trang quản trị hoặc chạy 'WebErp.Admin init'.");
             var version = c.ExecuteScalar<long>("SELECT version FROM config_meta WHERE id = 1");
-            if (_snapshot is null || _snapshot.Version != version) _snapshot = Load(c, version);
+            if (_snapshot is null || _snapshot.Version != version || _snapshot.Schema != schema) _snapshot = Load(c, version, schema);
             _checkedAt = now;
             return _snapshot;
         }
@@ -64,7 +70,14 @@ public sealed class SqliteTenantStore(ConfigDatabase db, SecretProtector protect
         }
     }
 
-    private static Snapshot Load(SqliteConnection c, long version)
+    /// <summary>Cài đặt chung đã giải mã (vd <see cref="SettingNames.LegacyPasswordKey"/>); null nếu chưa đặt.</summary>
+    public async ValueTask<string?> GetSettingAsync(string name, CancellationToken ct)
+    {
+        var s = await GetSnapshotAsync(ct).ConfigureAwait(false);
+        return s.Settings.TryGetValue(name, out var p) && p is not null ? protector.UnprotectSetting(p) : null;
+    }
+
+    private static Snapshot Load(SqliteConnection c, long version, int schema)
     {
         var rows = c.Query<TenantRow>(
             "SELECT tenant_key AS TenantKey, name AS Name, module_id AS ModuleId, connection_protected AS ConnectionProtected, enabled AS Enabled, " +
@@ -82,7 +95,10 @@ public sealed class SqliteTenantStore(ConfigDatabase db, SecretProtector protect
                      .GroupBy(h => TenantNames.NormalizeHost(h.Host)))
             byHost[g.Key] = g.Select(h => byKey.GetValueOrDefault(h.TenantKey)).OfType<Tenant>().ToList();
 
-        return new Snapshot(version, byKey, byHost, connections);
+        var settings = schema >= 2
+            ? c.Query<(string Name, string? Value)>("SELECT name, value_protected FROM setting").ToDictionary(s => s.Name, s => s.Value, StringComparer.Ordinal)
+            : new Dictionary<string, string?>(StringComparer.Ordinal);
+        return new Snapshot(version, schema, byKey, byHost, connections, settings);
     }
 
     internal static DateTimeOffset? ParseTime(string? s) =>
@@ -90,9 +106,11 @@ public sealed class SqliteTenantStore(ConfigDatabase db, SecretProtector protect
 
     private sealed record Snapshot(
         long Version,
+        int Schema,
         Dictionary<string, Tenant> ByKey,
         Dictionary<string, IReadOnlyList<Tenant>> ByHost,
-        Dictionary<string, string?> Connections);
+        Dictionary<string, string?> Connections,
+        Dictionary<string, string?> Settings);
 
     private sealed class TenantRow
     {

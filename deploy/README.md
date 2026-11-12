@@ -116,8 +116,9 @@ icacls $key /grant 'IIS AppPool\WebErp:R'
 
 ## 4. Biến môi trường của app pool (có bí mật)
 
-BE kiểm mật khẩu `SY_User` bằng thuật toán của ERP. Thuật toán cần một hằng 6 ký tự của hệ cũ (tài liệu 12 §2.5 trong repo FE).
-Hằng này **không có trong repo**. Lấy từ đội phát triển ERP, rồi đặt làm biến môi trường **chỉ của app pool**:
+Hằng mật khẩu kiểu cũ của ERP (6 ký tự, tài liệu 12 §2.5 trong repo FE) **nên đặt ở trang quản trị** (mục 9 → Cài đặt chung):
+lưu mã hóa, không cần sửa IIS. Biến `WebErp__LegacyPassword__Key` dưới đây chỉ là đường dự phòng; trang quản trị có giá trị thì
+Host dùng giá trị đó trước.
 
 ```powershell
 $appcmd = "$env:windir\system32\inetsrv\appcmd.exe"
@@ -127,7 +128,7 @@ function Set-PoolEnv($name, $value) {
 }
 Set-PoolEnv 'ASPNETCORE_ENVIRONMENT' 'Production'
 Set-PoolEnv 'WebErp__DataProtectionCertificateThumbprint' $cert.Thumbprint
-Set-PoolEnv 'WebErp__LegacyPassword__Key' '<HẰNG 6 KÝ TỰ>'
+# Set-PoolEnv 'WebErp__LegacyPassword__Key' '<HẰNG 6 KÝ TỰ>'   # dự phòng; nên đặt ở trang quản trị
 # Set-PoolEnv 'WebErp__Root' 'E:\WebErp'        # chỉ khi không dùng C:\WebErp
 Restart-WebAppPool WebErp                        # không cần iisreset
 ```
@@ -159,7 +160,8 @@ khai đến khi chạy thật (QĐ-08). Vì vậy BẮT BUỘC làm đủ các b
 
 1. Push lên `main` (hoặc tab Actions → CI → Run workflow trên `main`). Chờ CI xong, Deploy tự chạy trên runner.
    - Lúc này `/health` báo `"status":"degraded"` vì chưa có cấu hình. Đó là bình thường.
-2. Khởi tạo cấu hình, thêm công ty đầu tiên (PowerShell của tài khoản quản trị):
+2. Thêm công ty đầu tiên **trên trang quản trị** (mục 9): Công ty → Thêm công ty, nhập domain, chuỗi kết nối, mã xác thực; rồi
+   Thử kết nối. Cách cũ bằng dòng lệnh vẫn dùng được (PowerShell của tài khoản quản trị):
 
    ```powershell
    cd C:\WebErp\tools\admin
@@ -226,3 +228,45 @@ tệp `.pfx` ở mục 3, như vậy là đủ để dựng lại trên VPS mớ
 | Đăng xuất mọi người của một công ty | `WebErp.Admin.exe tenant logout-all MINHHUY` |
 | Cài lại một bản cũ | Actions → Deploy → Run workflow, nhập ID lần chạy CI của bản đó |
 | Quay lui thủ công | Bản trước nằm ở `C:\WebErp\releases\previous` (deploy.ps1 tự quay lui khi bản mới không khỏe) |
+
+## 9. Trang quản trị trên web (site thứ hai)
+
+Trang quản trị cấu hình công ty, chuỗi kết nối, bảo trì, hằng mật khẩu… dùng được trên điện thoại. Chạy ở **site IIS và app pool
+riêng**: chỉ app pool này được ghi `config.db`, site người dùng chỉ đọc. Khởi động là tự tạo / nâng cấp tệp cấu hình (không cần `init`).
+
+```powershell
+$root = if ($env:WebErp__Root) { $env:WebErp__Root } else { 'C:\WebErp' }
+New-Item -ItemType Directory -Force "$root\sites\admin" | Out-Null
+New-WebAppPool -Name WebErpAdmin
+Set-ItemProperty IIS:\AppPools\WebErpAdmin -Name managedRuntimeVersion -Value ''
+New-Website -Name WebErpAdmin -PhysicalPath "$root\sites\admin" -ApplicationPool WebErpAdmin -IPAddress 127.0.0.1 -Port 8082
+Set-WebConfigurationProperty -PSPath IIS:\ -Location WebErpAdmin -Filter system.webServer/security/authentication/anonymousAuthentication -Name userName -Value ''
+
+$a = 'IIS AppPool\WebErpAdmin'
+icacls "$root"             /grant "${a}:RX"
+icacls "$root\sites"       /grant "${a}:RX"
+icacls "$root\sites\admin" /grant "${a}:(OI)(CI)RX" 'weberp-deploy:(OI)(CI)M'
+icacls "$root\data"        /grant "${a}:(OI)(CI)M"       # chỉ app pool quản trị được ghi cấu hình
+icacls "$root\keys"        /grant "${a}:(OI)(CI)M"
+icacls $key                /grant "${a}:R"               # private key chứng chỉ Data Protection (mục 3)
+
+# Biến của pool quản trị (hàm Set-PoolEnv ở mục 4, đổi 'WebErp' thành 'WebErpAdmin' trong hàm).
+# Hosts: tên miền được mở trang quản trị TỪ XA (bắt buộc HTTPS). Không khai báo thì chỉ mở được trên chính VPS.
+#   ASPNETCORE_ENVIRONMENT = Production
+#   WebErp__DataProtectionCertificateThumbprint = <thumbprint mục 3>
+#   WebErp__Admin__Hosts__0 = admin.bms7.net
+Restart-WebAppPool WebErpAdmin
+```
+
+Lần triển khai sau, `deploy.ps1` thấy `sites\admin` thì tự cập nhật site này (kiểm `http://127.0.0.1:8082/health`).
+
+**Tài khoản quản trị đầu tiên** (chỉ làm được trên chính VPS):
+1. Đăng nhập VPS (Remote Desktop), mở trình duyệt vào `http://127.0.0.1:8082/`.
+2. Cài ứng dụng xác thực trên điện thoại, quét mã QR trên trang, đặt tên đăng nhập + mật khẩu, nhập mã 6 số.
+3. Từ đó đăng nhập từ xa qua `https://<tên trong WebErp__Admin__Hosts>/`: tên đăng nhập + mật khẩu + mã 6 số.
+
+**Dùng từ xa / trên điện thoại:** tạo bản ghi DNS cho tên quản trị (vd `admin.bms7.net` → IP VPS), cấp chứng chỉ (win-acme như các
+site khác), thêm binding `https *:443:admin.bms7.net` cho site `WebErpAdmin`, và khai báo tên đó ở `WebErp__Admin__Hosts__0`.
+Gọi từ tên khác, hoặc qua HTTP từ xa, trang quản trị đều từ chối.
+
+**Mất điện thoại:** trên VPS chạy `C:\WebErp\tools\admin\WebErp.Admin.exe admin remove <tên>`, rồi tạo lại ở `http://127.0.0.1:8082/`.

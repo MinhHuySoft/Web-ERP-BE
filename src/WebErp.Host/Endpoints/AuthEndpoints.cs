@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.Extensions.Options;
+using WebErp.Config;
 using WebErp.Core.Auth;
 using WebErp.Core.Errors;
 using WebErp.Core.Messages;
@@ -10,6 +11,7 @@ using WebErp.Host.Auth;
 using WebErp.Host.Html;
 using WebErp.Host.Middleware;
 using WebErp.Html.Roles;
+using WebErp.Web;
 
 namespace WebErp.Host.Endpoints;
 
@@ -30,7 +32,7 @@ public static class AuthEndpoints
     }
 
     private static async Task<IResult> LoginAsync(HttpContext ctx, IAntiforgery af, IErpUsers users, LoginThrottle throttle,
-        IOptions<WebErpOptions> options, TimeProvider time, ILoggerFactory logs)
+        IOptions<WebErpOptions> options, SqliteTenantStore config, TimeProvider time, ILoggerFactory logs)
     {
         var log = logs.CreateLogger("WebErp.Login");
         var host = ctx.Features.Get<HostTenants>()!;
@@ -67,10 +69,11 @@ public static class AuthEndpoints
                 [ErpMessage.Error($"Đăng nhập sai quá nhiều lần. Vui lòng thử lại sau {Math.Max(1, (int)Math.Ceiling(wait.TotalMinutes))} phút.")],
                 StatusCodes.Status429TooManyRequests, (int)Math.Ceiling(wait.TotalSeconds));
 
-        var key = options.Value.LegacyPassword.Key;
+        // Ưu tiên giá trị đặt ở trang quản trị (lưu mã hóa); biến môi trường của app pool là đường dự phòng.
+        var key = await config.GetSettingAsync(SettingNames.LegacyPasswordKey, ctx.RequestAborted) ?? options.Value.LegacyPassword.Key;
         if (string.IsNullOrEmpty(key))
         {
-            log.LogCritical("Chưa đặt WebErp:LegacyPassword:Key (biến môi trường WebErp__LegacyPassword__Key). Không đăng nhập được.");
+            log.LogCritical("Chưa đặt hằng mật khẩu ERP (trang quản trị → Cài đặt chung, hoặc biến WebErp__LegacyPassword__Key). Không đăng nhập được.");
             return LoginPage(ctx, af, tenant.Key, userName, [ErpMessage.Error("Hệ thống chưa cấu hình xác thực. Vui lòng báo quản trị.")],
                 StatusCodes.Status503ServiceUnavailable);
         }
@@ -100,7 +103,9 @@ public static class AuthEndpoints
         var principal = ErpClaims.Create(tenant, record.User, now, CookieAuthenticationDefaults.AuthenticationScheme);
         await ctx.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal, new AuthenticationProperties { IsPersistent = false });
         log.LogInformation("Đăng nhập: công ty {Tenant}, người dùng {User}, IP {Ip}.", tenant.Key, record.User.UserName, ip);
-        return HtmlResults.SeeOther(ErpUrls.Of(ctx).Home);
+        // 303 về trang phiên (chuẩn 5.1 cho phép homeUrl hoặc sessionUrl): FE đọc phiên rồi dựng ứng dụng. Không về trang chủ, vì
+        // trang chủ có thể kèm thông điệp cảnh báo mà FE hiểu nhầm là đăng nhập lỗi.
+        return HtmlResults.SeeOther(ErpUrls.Of(ctx).Session);
     }
 
     private static IResult LoginPage(HttpContext ctx, IAntiforgery af, string? selected, string? userName, IReadOnlyList<ErpMessage>? messages,

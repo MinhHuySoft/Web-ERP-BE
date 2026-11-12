@@ -6,6 +6,7 @@ using WebErp.Host.Html;
 using WebErp.Host.Middleware;
 using WebErp.Html.Roles;
 using WebErp.Html.Screens;
+using WebErp.Web;
 
 namespace WebErp.Host.Endpoints;
 

@@ -8,6 +8,7 @@
     <ProjectReference Include="..\WebErp.Html\WebErp.Html.csproj" />
     <ProjectReference Include="..\WebErp.Erp\WebErp.Erp.csproj" />
     <ProjectReference Include="..\WebErp.Config\WebErp.Config.csproj" />
+    <ProjectReference Include="..\WebErp.Web\WebErp.Web.csproj" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="WebErp.Tests" />
