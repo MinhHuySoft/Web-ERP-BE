@@ -125,7 +125,7 @@ Xem [deploy/README.md](../deploy/README.md). Tóm tắt:
   - mua bán: Mua hàng (+ nhập khẩu), Trả NCC, Mua/Bán dịch vụ, Hóa đơn bán (+ xuất khẩu), Hàng bán trả lại;
   - kế toán và kho: Phiếu kế toán, Phân rã, Nhập/Xuất/Chuyển kho, Phân bổ chi phí, Theo dõi nhập/xuất.
   
-  Nguồn: mã dịch ngược + cột thật MedData. Sinh lại bằng script trong ghi chú đầu mỗi tệp.
+  Nguồn: mã dịch ngược (số dòng ghi ở đầu mỗi tệp) + cột thật MedData. Sửa trực tiếp tệp JSON khi cần.
 - Chạy thử trên bản sao MedData: 19 biến thể theo Para đều mở được danh sách, chứng từ và tab; validator 0 lỗi.
 - Còn: ~29 form hệ thống (sao lưu, phân quyền, khai báo kỳ…) chưa làm. Chỉ làm phần cần trên web (người dùng / phân quyền ở
   trang quản trị).
