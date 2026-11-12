@@ -15,7 +15,7 @@ push main ─► CI (runner GitHub, windows-latest): build, test, đóng gói ar
 Bố cục trên VPS:
 
 ```text
-D:\WebErp\
+C:\WebErp\
   sites\app\      BE + FE (wwwroot)  ← site IIS "WebErp"
   tools\admin\    WebErp.Admin.exe (dòng lệnh quản trị)
   data\           config.db (công ty, domain, chuỗi kết nối mã hóa)
@@ -31,10 +31,18 @@ D:\WebErp\
 
 ## 2. Thư mục, app pool, site
 
+Thư mục dữ liệu mặc định là `C:\WebErp`. Muốn đặt ở ổ khác (vd `E:\WebErp`), đặt **biến môi trường cấp máy** `WebErp__Root`
+trước khi làm các bước dưới. Host, `WebErp.Admin`, `deploy.ps1`, `backup.ps1` đều đọc biến này. App pool chỉ thấy biến mới sau
+`iisreset`, dịch vụ runner chỉ thấy sau khi khởi động lại dịch vụ.
+
+```powershell
+[Environment]::SetEnvironmentVariable('WebErp__Root', 'E:\WebErp', 'Machine')   # bỏ qua nếu dùng C:\WebErp
+```
+
 Chạy PowerShell **với quyền quản trị**:
 
 ```powershell
-$root = 'D:\WebErp'
+$root = if ($env:WebErp__Root) { $env:WebErp__Root } else { 'C:\WebErp' }
 'sites\app','tools\admin','data','keys','files','logs','backup','releases' | ForEach-Object { New-Item -ItemType Directory -Force (Join-Path $root $_) | Out-Null }
 
 Import-Module WebAdministration
@@ -59,7 +67,7 @@ icacls "$root\logs"      /grant "${p}:(OI)(CI)M"
 
 ## 3. Chứng chỉ bọc khóa Data Protection (làm TRƯỚC khi thêm công ty)
 
-Chuỗi kết nối của khách được mã hóa bằng khóa trong `D:\WebErp\keys`. Khóa này lại được bọc bằng một chứng chỉ, để bản sao lưu
+Chuỗi kết nối của khách được mã hóa bằng khóa trong `C:\WebErp\keys`. Khóa này lại được bọc bằng một chứng chỉ, để bản sao lưu
 khôi phục được lên VPS khác.
 
 ```powershell
@@ -93,7 +101,7 @@ GitHub khuyến cáo **không dùng runner tự host cho repo công khai**, vì 
 khai đến khi chạy thật (QĐ-08). Vì vậy BẮT BUỘC làm đủ các bước sau:
 
 1. **Tài khoản chạy runner:** tạo user Windows riêng, ví dụ `weberp-deploy`. Không cho vào nhóm Administrators. Cấp quyền
-   Modify trên `D:\WebErp\sites\app`, `D:\WebErp\tools`, `D:\WebErp\releases`.
+   Modify trên `C:\WebErp\sites\app`, `C:\WebErp\tools`, `C:\WebErp\releases`.
 2. **Cài runner:** repo → Settings → Actions → Runners → New self-hosted runner → Windows x64. Làm theo lệnh GitHub hiện ra
    trong `C:\actions-runner`. Khi chạy `config.cmd`:
    - thêm `--labels weberp-vps`;
@@ -113,7 +121,7 @@ khai đến khi chạy thật (QĐ-08). Vì vậy BẮT BUỘC làm đủ các b
 2. Khởi tạo cấu hình, thêm công ty đầu tiên (PowerShell của tài khoản quản trị):
 
    ```powershell
-   cd D:\WebErp\tools\admin
+   cd C:\WebErp\tools\admin
    .\WebErp.Admin.exe init
    .\WebErp.Admin.exe tenant add MINHHUY --name "Tên công ty" --host erp.congty.vn --db-label "Tên DB"
    # Nhập chuỗi kết nối khi được hỏi (không hiện ra màn hình), ví dụ DB trên cùng VPS dùng Windows Authentication:
@@ -144,10 +152,10 @@ DB của khách ở máy chủ khác: dùng SQL login riêng (không `db_owner`)
 Task Scheduler → Create Task, chạy hằng ngày bằng tài khoản quản trị:
 
 ```text
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File D:\WebErp\tools\backup.ps1 -Destination \\<nơi-ngoài-VPS>\weberp
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\WebErp\tools\backup.ps1 -Destination \\<nơi-ngoài-VPS>\weberp
 ```
 
-`backup.ps1` được mỗi lần triển khai chép sẵn vào `D:\WebErp\tools\`. Bản sao lưu gồm `config-*.db` và thư mục khóa. Cùng với
+`backup.ps1` được mỗi lần triển khai chép sẵn vào `C:\WebErp\tools\`. Bản sao lưu gồm `config-*.db` và thư mục khóa. Cùng với
 tệp `.pfx` ở bước 3, như vậy là đủ để dựng lại trên VPS mới.
 
 ## 8. Kiểm tra và xử lý sự cố
@@ -159,4 +167,4 @@ tệp `.pfx` ở bước 3, như vậy là đủ để dựng lại trên VPS m�
 | Bảo trì một công ty (BE trả 503) | `WebErp.Admin.exe tenant maintenance MINHHUY 30` … `tenant maintenance MINHHUY off` |
 | Đăng xuất mọi người của một công ty | `WebErp.Admin.exe tenant logout-all MINHHUY` |
 | Cài lại một bản cũ | Actions → Deploy → Run workflow, nhập ID lần chạy CI của bản đó |
-| Quay lui thủ công | Bản trước nằm ở `D:\WebErp\releases\previous` (deploy.ps1 tự quay lui khi bản mới không khỏe) |
+| Quay lui thủ công | Bản trước nằm ở `C:\WebErp\releases\previous` (deploy.ps1 tự quay lui khi bản mới không khỏe) |

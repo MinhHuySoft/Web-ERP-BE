@@ -9,8 +9,9 @@
 #>
 param(
     [Parameter(Mandatory = $true)][string]$Package,
-    [string]$Root = 'D:\WebErp',
-    [string]$HealthUrl = 'http://127.0.0.1:8081/health',
+    # Thư mục dữ liệu: biến môi trường cấp máy WebErp__Root (cùng biến Host và WebErp.Admin đọc), mặc định C:\WebErp.
+    [string]$Root = $(if ($env:WebErp__Root) { $env:WebErp__Root } else { 'C:\WebErp' }),
+    [string]$HealthUrl = $(if ($env:WEBERP_HEALTH_URL) { $env:WEBERP_HEALTH_URL } else { 'http://127.0.0.1:8081/health' }),
     [int]$HealthTimeoutSeconds = 90
 )
 $ErrorActionPreference = 'Stop'

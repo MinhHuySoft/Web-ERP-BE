@@ -19,7 +19,7 @@ public sealed record WebErpPaths(string Root)
     {
         var root = configuration["WebErp:Root"];
         if (string.IsNullOrWhiteSpace(root))
-            throw new InvalidOperationException("Thiếu cấu hình WebErp:Root (thư mục dữ liệu, vd D:\\WebErp).");
+            throw new InvalidOperationException("Thiếu cấu hình WebErp:Root (thư mục dữ liệu, vd C:\\WebErp; đặt bằng biến môi trường WebErp__Root).");
         return new WebErpPaths(Path.GetFullPath(Path.IsPathRooted(root) ? root : Path.Combine(baseDir, root)));
     }
 }
