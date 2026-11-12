@@ -60,7 +60,10 @@ if (-not (Test-Path $versionFile) -or -not (Test-Path (Join-Path $Package 'app\W
 }
 $version = (Get-Content $versionFile -Raw).Trim()
 Write-Host "Triển khai phiên bản $version vào $site"
-New-Item -ItemType Directory -Force $site, $adminDir, $previous | Out-Null
+# Chỉ tạo khi chưa có: New-Item -Force kiểm cả thư mục cha (vd C:\WebErp\sites), mà tài khoản runner không có quyền ở đó.
+foreach ($dir in $site, $adminDir, $previous) {
+    if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir | Out-Null }
+}
 
 $hasCurrent = Test-Path (Join-Path $site 'WebErp.Host.dll')
 if ($hasCurrent) { Copy-Mirror $site $previous @('/XF', 'app_offline.htm', '/XD', 'logs') }

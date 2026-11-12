@@ -77,6 +77,10 @@ Set-WebConfigurationProperty -PSPath IIS:\ -Location WebErp -Filter system.webSe
 icacls $root /inheritance:r /grant:r '*S-1-5-32-544:(OI)(CI)F' '*S-1-5-18:(OI)(CI)F'
 
 $p = 'IIS AppPool\WebErp'
+# Chỉ xem được chính thư mục gốc và sites (không có (OI)(CI): không đọc được data, keys).
+# Thiếu dòng này thì deploy.ps1 bản cũ lỗi "New-Item : Access is denied" ở C:\WebErp\sites.
+icacls "$root"           /grant "${p}:RX" 'weberp-deploy:RX'
+icacls "$root\sites"     /grant "${p}:RX" 'weberp-deploy:RX'
 icacls "$root\sites\app" /grant "${p}:(OI)(CI)RX" 'weberp-deploy:(OI)(CI)M'
 icacls "$root\data"      /grant "${p}:(OI)(CI)R"      # chỉ đọc: chỉ WebErp.Admin (quản trị) được sửa cấu hình
 icacls "$root\keys"      /grant "${p}:(OI)(CI)M"
