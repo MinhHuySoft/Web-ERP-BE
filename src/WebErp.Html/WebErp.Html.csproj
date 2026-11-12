@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Renderer ERP-HTML: khong truy cap DB, khong quyet quyen. -->
+  <ItemGroup>
+    <ProjectReference Include="..\WebErp.Core\WebErp.Core.csproj" />
+  </ItemGroup>
+</Project>

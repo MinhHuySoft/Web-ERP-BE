@@ -1,0 +1,51 @@
+# CD: cài gói do CI build lên VPS, chạy trên runner TỰ HOST (nhãn weberp-vps).
+#
+# An toàn cho repo công khai:
+# - Workflow này chỉ chạy sau CI thành công của một PUSH lên main trong chính repo này (không bao giờ từ pull request / fork).
+# - workflow_run luôn dùng tệp workflow trên nhánh mặc định, nên PR không sửa được bước triển khai.
+# - Runner chỉ tải artifact (build trên runner của GitHub) rồi chạy deploy.ps1 có trong gói; không build mã trên VPS.
+# - Bắt buộc chỉnh thêm cài đặt repo ở deploy/README.md mục "Runner tự host".
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'ID lần chạy CI trên main có gói cần cài (xem trong tab Actions)'
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: [self-hosted, Windows, weberp-vps]
+    environment: production
+    timeout-minutes: 20
+    steps:
+      - name: Tải gói từ lần chạy CI
+        uses: actions/download-artifact@v4
+        with:
+          name: weberp
+          path: ${{ runner.temp }}/weberp
+          run-id: ${{ github.event.workflow_run.id || inputs.run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Cài đặt và khởi động lại BE
+        shell: powershell
+        run: '& "$env:RUNNER_TEMP\weberp\deploy\deploy.ps1" -Package "$env:RUNNER_TEMP\weberp"'

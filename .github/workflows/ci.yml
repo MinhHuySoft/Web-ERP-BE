@@ -1,0 +1,72 @@
+# CI: build + test trên runner của GitHub (KHÔNG phải runner tự host trên VPS).
+# Push lên main: đóng gói thành artifact "weberp" để workflow Deploy cài lên VPS.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Đọc phiên bản FE ghim trong fe.ref
+        id: fe
+        shell: pwsh
+        run: '"ref=$((Get-Content fe.ref -Raw).Trim())" >> $env:GITHUB_OUTPUT'
+
+      - name: Lấy FE (validator + giao diện) đúng phiên bản
+        uses: actions/checkout@v4
+        with:
+          repository: MinhHuySoft/Web-ERP
+          ref: ${{ steps.fe.outputs.ref }}
+          path: _fe
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Khởi động LocalDB (cho integration test trên DB giả, nếu máy có)
+        shell: pwsh
+        continue-on-error: true
+        run: sqllocaldb start MSSQLLocalDB
+
+      - run: dotnet restore WebErp.slnx
+
+      - run: dotnet build WebErp.slnx -c Release --no-restore -p:InformationalVersion=${{ github.sha }}
+
+      - name: Test (unit, Host, contract qua validate.js của FE, integration trên DB giả)
+        run: dotnet test --solution WebErp.slnx -c Release --no-build
+        env:
+          WEBERP_FE_WEB: ${{ github.workspace }}/_fe/web
+
+      - name: Đóng gói
+        if: github.event_name != 'pull_request'
+        shell: pwsh
+        run: ./deploy/package.ps1 -Version '${{ github.sha }}' -FrontendWeb '_fe/web' -Output 'artifacts/weberp'
+
+      - uses: actions/upload-artifact@v4
+        if: github.event_name != 'pull_request'
+        with:
+          name: weberp
+          path: artifacts/weberp
+          retention-days: 14
+          if-no-files-found: error
