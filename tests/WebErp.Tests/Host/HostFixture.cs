@@ -79,6 +79,7 @@ public sealed class HostFixture : IDisposable
 
         Erp.AddUser("MC", "admin", "123", "Quản trị hệ thống");
         Erp.AddUser("MC", "locked", "123", "Bị khóa");
+        Erp.AddUser("MC", "space", " a b ", "Mật khẩu có dấu cách");
         Erp.AddUser("B", "kt", "abc", "Kế toán B");
         Erp.Menu.AddRange([
             new MenuEntry("01", null, "Hệ thống", null, null, false, false),

@@ -40,7 +40,8 @@ public static class AuthEndpoints
         var companyKey = form[LoginRenderer.CompanyField].ToString();
         // WinForms cắt khoảng trắng cả tên đăng nhập lẫn mật khẩu trước khi kiểm (LoginFrm, tài liệu 12 §2.4).
         var userName = form[LoginRenderer.UserField].ToString().Trim();
-        var password = form[LoginRenderer.PasswordField].ToString().Trim();
+        // Không cắt khoảng trắng: WinForms giữ nguyên mật khẩu, nên mật khẩu có dấu cách ở đầu/cuối vẫn phải đăng nhập được.
+        var password = form[LoginRenderer.PasswordField].ToString();
 
         try
         {

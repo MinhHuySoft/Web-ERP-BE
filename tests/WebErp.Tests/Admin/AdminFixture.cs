@@ -6,7 +6,9 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using WebErp.Core.Auth;
+using WebErp.Tests.Host;
 using WebErp.Tests.Support;
 
 namespace WebErp.Tests.Admin;
@@ -26,6 +28,9 @@ public sealed class AdminFixture : IDisposable
     public WebApplicationFactory<WebErp.Admin.Program> Factory { get; }
     public byte[]? Secret { get; set; }
 
+    /// <summary>DB ERP giả để trang Cài đặt chung thử hằng mật khẩu.</summary>
+    public FakeErp Erp { get; } = new();
+
     public AdminFixture()
     {
         Environment.SetEnvironmentVariable("WebErp__Root", Root);
@@ -37,6 +42,8 @@ public sealed class AdminFixture : IDisposable
             b.ConfigureServices(s =>
             {
                 s.AddSingleton<TimeProvider>(Clock);
+                s.RemoveAll<IErpUsers>();
+                s.AddSingleton<IErpUsers>(Erp);
                 s.AddSingleton<IStartupFilter, RemoteIpFilter>();
             });
         });

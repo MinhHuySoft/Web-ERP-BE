@@ -221,7 +221,8 @@ tệp `.pfx` ở mục 3, như vậy là đủ để dựng lại trên VPS mớ
 | BE đang chạy bản nào | `Invoke-RestMethod http://127.0.0.1:8081/health` |
 | `/health` báo "chưa khởi tạo cấu hình" | Chạy `WebErp.Admin.exe init` (mục 6.2) |
 | `/health` báo "không đọc được cấu hình" | Pool thiếu quyền đọc `data` (mục 2), hoặc `WebErp__Root` của pool khác của máy |
-| Đăng nhập báo "chưa cấu hình xác thực" | Thiếu `WebErp__LegacyPassword__Key` trong biến của pool (mục 4) |
+| Đăng nhập báo "chưa cấu hình xác thực" | Chưa đặt hằng mật khẩu: trang quản trị → Cài đặt chung (hoặc `WebErp__LegacyPassword__Key`, mục 4) |
+| Mọi người dùng đều bị báo "mật mã không đúng" | Hằng mật khẩu sai. Đặt lại ở Cài đặt chung: trang thử hằng với một tài khoản ERP thật, không khớp thì không lưu |
 | Nhật ký lỗi | Event Viewer → Windows Logs → Application (nguồn `WebErp.Host` / `.NET Runtime` / `IIS AspNetCore Module V2`) |
 | Đổi biến môi trường của pool | `Set-PoolEnv` (mục 4) rồi `Restart-WebAppPool WebErp`. Không cần `iisreset` |
 | Bảo trì một công ty (BE trả 503) | `WebErp.Admin.exe tenant maintenance MINHHUY 30` … `tenant maintenance MINHHUY off` |
