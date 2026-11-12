@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Chay tren DB GIA tao tam o LocalDB. Khong bao gio tro vao DB khach hang. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\WebErp.Erp\WebErp.Erp.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\fake-erp\fake-erp.sql" Link="fake-erp.sql" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- SQLite cau hinh: cong ty, domain, chuoi ket noi (ma hoa). -->
+  <ItemGroup>
+    <ProjectReference Include="..\WebErp.Core\WebErp.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Dapper" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\db\config\*.sql" LinkBase="Migrations" LogicalName="WebErp.Config.Migrations.%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Quan tri cau hinh. M1: dong lenh tren VPS. Trang web quan tri (TOTP) o M5. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>WebErp.Admin</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\WebErp.Core\WebErp.Core.csproj" />
+    <ProjectReference Include="..\WebErp.Erp\WebErp.Erp.csproj" />
+    <ProjectReference Include="..\WebErp.Config\WebErp.Config.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="appsettings.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+</Project>

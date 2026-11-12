@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/WebErp.Core/WebErp.Core.csproj" />
+    <Project Path="src/WebErp.Html/WebErp.Html.csproj" />
+    <Project Path="src/WebErp.Erp/WebErp.Erp.csproj" />
+    <Project Path="src/WebErp.Config/WebErp.Config.csproj" />
+    <Project Path="src/WebErp.Host/WebErp.Host.csproj" />
+    <Project Path="src/WebErp.Admin/WebErp.Admin.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/WebErp.Tests/WebErp.Tests.csproj" />
+    <Project Path="tests/WebErp.ContractTests/WebErp.ContractTests.csproj" />
+    <Project Path="tests/WebErp.IntegrationTests/WebErp.IntegrationTests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <!-- Site cho nguoi dung ERP. Mong: chi ghep DI, middleware, endpoint. -->
+  <PropertyGroup>
+    <AssemblyName>WebErp.Host</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\WebErp.Core\WebErp.Core.csproj" />
+    <ProjectReference Include="..\WebErp.Html\WebErp.Html.csproj" />
+    <ProjectReference Include="..\WebErp.Erp\WebErp.Erp.csproj" />
+    <ProjectReference Include="..\WebErp.Config\WebErp.Config.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="WebErp.Tests" />
+  </ItemGroup>
+</Project>
