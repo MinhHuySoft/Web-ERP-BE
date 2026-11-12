@@ -15,10 +15,8 @@ public sealed class ErpConnectionFactory(ITenantStore tenants, ErpOptions option
         if (string.IsNullOrWhiteSpace(raw))
             throw new ErpUnavailableException(tenant.Key, new InvalidOperationException("Công ty chưa có chuỗi kết nối."));
 
-        var csb = new SqlConnectionStringBuilder(raw) { ApplicationName = "WebErp" };
-        if (!raw.Contains("timeout", StringComparison.OrdinalIgnoreCase)) csb.ConnectTimeout = Options.ConnectTimeoutSeconds;
-
-        var conn = new SqlConnection(csb.ConnectionString);
+        // Chuẩn hóa mỗi lần mở (rẻ), kể cả chuỗi nhập từ trước khi có bước chuẩn hóa ở công cụ quản trị.
+        var conn = new SqlConnection(ErpConnectionStrings.Normalize(raw, Options).ConnectionString);
         try
         {
             await conn.OpenAsync(ct).ConfigureAwait(false);
