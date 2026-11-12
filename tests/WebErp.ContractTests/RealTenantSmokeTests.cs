@@ -1,3 +1,4 @@
+using Dapper;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.DependencyInjection;
 using WebErp.Config;
@@ -18,6 +19,47 @@ namespace WebErp.ContractTests;
 /// </summary>
 public sealed class RealTenantSmokeTests(FrontendValidator validator) : IClassFixture<FrontendValidator>
 {
+    /// <summary>
+    /// Mô tả bảng/view thật (cột, kiểu, số dòng) và dòng SY_FrmCfg của các form, để soạn tệp mô tả form viết tay.
+    /// Biến <c>WEBERP_REAL_DESCRIBE</c>: danh sách tên bảng/view hoặc <c>form:TênForm</c>, cách nhau dấu phẩy. Chỉ đọc catalog.
+    /// </summary>
+    [Fact]
+    public async Task Describe_real_tables_for_overlays()
+    {
+        var root = Environment.GetEnvironmentVariable("WEBERP_REAL_ROOT");
+        var names = Environment.GetEnvironmentVariable("WEBERP_REAL_DESCRIBE");
+        Assert.SkipWhen(string.IsNullOrEmpty(root) || string.IsNullOrEmpty(names), "Chỉ chạy trên máy dev (WEBERP_REAL_ROOT, WEBERP_REAL_DESCRIBE).");
+        var outDir = Environment.GetEnvironmentVariable("WEBERP_REAL_OUT") ?? Path.GetTempPath();
+        Directory.CreateDirectory(outDir);
+        var paths = new WebErpPaths(root!);
+        var services = new ServiceCollection();
+        services.AddWebErpDataProtection(paths, null);
+        using var sp = services.BuildServiceProvider();
+        var store = new SqliteTenantStore(new ConfigDatabase(paths), new SecretProtector(sp.GetRequiredService<IDataProtectionProvider>()), TimeProvider.System);
+        var tenant = (await store.GetAsync(Environment.GetEnvironmentVariable("WEBERP_REAL_TENANT")!, CancellationToken.None))!;
+        await using var c = await new ErpConnectionFactory(store, new ErpOptions()).OpenAsync(tenant, CancellationToken.None);
+        var lines = new List<string>();
+        foreach (var n in names!.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (n.StartsWith("form:", StringComparison.Ordinal))
+            {
+                var rows = await c.QueryAsync<(string, string, string, string)>(
+                    "SELECT FID, KeyID, COALESCE(SubID,''), LEFT(REPLACE(REPLACE(KeyValue, CHAR(13), ' '), CHAR(10), ' '), 200) FROM dbo.SY_FrmCfg " +
+                    "WHERE FID IN (@f, @f + '_Bank', @f + '_Import', @f + '_IMPORT') AND COALESCE(KeyValue,'')<>'' AND KeyID NOT LIKE 'LY%' " +
+                    "AND KeyID NOT IN ('EBC','EBS','EBE','EBD','ESS','ESL','ESC','DW2','DW3','FLG') ORDER BY FID, KeyID, SubID", new { f = n[5..] });
+                lines.Add($"== {n}:");
+                lines.AddRange(rows.Select(r => $"   {r.Item1} {r.Item2}.{r.Item3} = {r.Item4}"));
+                continue;
+            }
+            var cols = await c.QueryAsync<(string, string, bool)>(
+                "SELECT c.name, TYPE_NAME(c.user_type_id), c.is_nullable FROM sys.columns c WHERE c.object_id = OBJECT_ID(@t) ORDER BY c.column_id", new { t = n });
+            var kind = await c.ExecuteScalarAsync<string>("SELECT type_desc FROM sys.objects WHERE object_id = OBJECT_ID(@t)", new { t = n });
+            var count = await c.ExecuteScalarAsync<long?>("SELECT SUM(p.rows) FROM sys.partitions p WHERE p.object_id = OBJECT_ID(@t) AND p.index_id IN (0,1)", new { t = n });
+            lines.Add($"== {n} [{kind ?? "KHÔNG CÓ"}] rows={count?.ToString() ?? "?"}: " + string.Join(", ", cols.Select(x => $"{x.Item1}:{x.Item2}")));
+        }
+        await File.WriteAllLinesAsync(Path.Combine(outDir, "describe.txt"), lines);
+    }
+
     [Fact]
     public async Task Real_metadata_screens_pass_frontend_validator()
     {
@@ -43,7 +85,10 @@ public sealed class RealTenantSmokeTests(FrontendValidator validator) : IClassFi
         foreach (var spec in forms)
         {
             var parts = spec.Split('|');
-            var req = new ScreenRequest(tenant, user, null, parts[0], parts.Length > 1 ? parts[1] : null, new Dictionary<string, string>());
+            // WEBERP_REAL_QUERY: query string áp cho mọi danh sách, vd "FromDate=2020-01-01" để có dữ liệu.
+            var query = (Environment.GetEnvironmentVariable("WEBERP_REAL_QUERY") ?? "").Split('&', StringSplitOptions.RemoveEmptyEntries)
+                .Select(x => x.Split('=', 2)).ToDictionary(x => x[0], x => x.Length > 1 ? Uri.UnescapeDataString(x[1]) : "");
+            var req = new ScreenRequest(tenant, user, null, parts[0], parts.Length > 1 ? parts[1] : null, query);
             var list = await screens.OpenListAsync(req, CancellationToken.None);
             report.Add($"{spec}: {list.Status} {list.Note} rows={list.Rows?.Count} total={list.Total}");
             if (list.Status != ScreenStatus.Ok) continue;

@@ -30,10 +30,13 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
     [GeneratedRegex("^[A-Za-z_][A-Za-z0-9_]{0,99}$")]
     private static partial Regex Identifier();
 
+    /// <summary>Form viết tay chưa có tệp mô tả (<see cref="FormOverlays"/>): web chưa dựng được.</summary>
+    private static bool IsHandCodedWithoutOverlay(string formName) => HandCodedForms.Names.Contains(formName) && !FormOverlays.Has(formName);
+
     public async Task<ListView> OpenListAsync(ScreenRequest req, CancellationToken ct)
     {
         var form = await metadata.GetFormAsync(req.Tenant, req.FormName, req.RuntimeName, ct);
-        if (form?.Master is not { } slot || HandCodedForms.Names.Contains(req.FormName)) return new ListView(ScreenStatus.NotSupported, form);
+        if (form?.Master is not { } slot || IsHandCodedWithoutOverlay(req.FormName)) return new ListView(ScreenStatus.NotSupported, form);
         var ctx = await ContextAsync(req, form, ct);
         if (!ctx.Perm.View) return new ListView(ScreenStatus.Forbidden, form);
         var src = await metadata.GetColumnsAsync(req.Tenant, slot.Source, ct);
@@ -70,14 +73,14 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
             return new ListView(ScreenStatus.Ok, form, cols.Select(x => x.Col).ToList(),
                 data.Rows.Select(row => cols.Select(x => row[x.Index]).ToArray()).ToList(),
                 data.Rows.Select(row => keyIndex < 0 ? "" : Invariant(row[keyIndex])).ToList(),
-                total, sums, filters, slot.PrimaryKey, form.IsEdit && keyIndex >= 0);
+                total, sums, filters, keyIndex >= 0 ? slot.PrimaryKey : null, form.IsEdit && keyIndex >= 0);
         }, e => new ListView(ScreenStatus.ConfigError, form, Note: e), ct);
     }
 
     public async Task<RecordView> OpenRecordAsync(ScreenRequest req, string key, CancellationToken ct)
     {
         var form = await metadata.GetFormAsync(req.Tenant, req.FormName, req.RuntimeName, ct);
-        if (form?.Master is not { } slot || !form.IsEdit || HandCodedForms.Names.Contains(req.FormName)) return new RecordView(ScreenStatus.NotSupported, form);
+        if (form?.Master is not { } slot || !form.IsEdit || IsHandCodedWithoutOverlay(req.FormName)) return new RecordView(ScreenStatus.NotSupported, form);
         var ctx = await ContextAsync(req, form, ct);
         if (!ctx.Perm.View) return new RecordView(ScreenStatus.Forbidden, form);
         var src = await metadata.GetColumnsAsync(req.Tenant, slot.Source, ct);
@@ -87,8 +90,14 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
             var master = await MasterRowAsync(ctx, form, slot, src, key, c, tx, ct);
             if (master is null) return new RecordView(ScreenStatus.NotFound, form, key);
             var tabs = RecordTabs(ctx, form, slot, master);
-            var details = form.Details.Where(d => DetailVisible(ctx, form, d))
-                .Select((d, i) => new ViewDetailTab(d.Id, d.Caption ?? (i == 0 ? "Chi tiết" : $"Chi tiết {i + 1}"))).ToList();
+            var visible = new List<SlotMeta>();
+            foreach (var d in form.Details.Where(d => DetailVisible(ctx, form, d)))
+            {
+                // Tab tùy chọn: bảng không có trong DB của khách thì bỏ (WinForms kiểm sysobjects trước khi nạp).
+                if (d.Optional && (await metadata.GetColumnsAsync(req.Tenant, d.Source, ct)).Count == 0) continue;
+                visible.Add(d);
+            }
+            var details = visible.Select((d, i) => new ViewDetailTab(d.Id, d.Caption ?? (i == 0 ? "Chi tiết" : $"Chi tiết {i + 1}"))).ToList();
             return new RecordView(ScreenStatus.Ok, form, key, slot.PrimaryKey, tabs, details);
         }, e => new RecordView(ScreenStatus.ConfigError, form, key, Note: e), ct);
     }
@@ -96,7 +105,7 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
     public async Task<DetailView> OpenDetailAsync(ScreenRequest req, string key, string slotId, CancellationToken ct)
     {
         var form = await metadata.GetFormAsync(req.Tenant, req.FormName, req.RuntimeName, ct);
-        if (form?.Master is not { } slot || !form.IsEdit || HandCodedForms.Names.Contains(req.FormName)) return new DetailView(ScreenStatus.NotSupported);
+        if (form?.Master is not { } slot || !form.IsEdit || IsHandCodedWithoutOverlay(req.FormName)) return new DetailView(ScreenStatus.NotSupported);
         var detail = form.Details.FirstOrDefault(d => d.Id.Equals(slotId, StringComparison.OrdinalIgnoreCase));
         if (detail is null) return new DetailView(ScreenStatus.NotFound);
         var ctx = await ContextAsync(req, form, ct);
@@ -113,6 +122,7 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
             if (linkIndex < 0) return new DetailView(ScreenStatus.ConfigError, Note: $"Bảng chính không có cột nối {masterField}.");
             var q = new SlotQuery(detail, ctx.Resolve);
             q.Where.Add($"{q.Col(detail.DetailField ?? slot.PrimaryKey)} = {q.Param(master.Rows[0][linkIndex])}");
+            if (detail.FilterWeb is not null) q.Where.Add(q.Fragment(detail.FilterWeb, $"{detail.Id}.FTW"));
             if (detail.Filter is not null) q.Where.Add(q.Fragment(detail.Filter, $"{detail.Id}.FTR"));
             if (detail.FilterEx is not null) q.Where.Add(q.Fragment(detail.FilterEx, $"{detail.Id}.FTX"));
             var data = await SqlReader.ReadAsync(c, tx, q.ListSql(Math.Min(DetailMax, detail.Top ?? DetailMax)), q.Parameters, ctx.Timeout, DetailMax, ct);
@@ -122,7 +132,7 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
                 data.Rows.Select(row => cols.Select(x => row[x.Index]).ToArray()).ToList(),
                 data.Rows.Select(row => keyIndex < 0 ? "" : Invariant(row[keyIndex])).ToList(), data.Rows.Count,
                 cols.Where(x => x.Col.Sum).ToDictionary(x => x.Col.Field, x => SumRows(data.Rows, x.Index), StringComparer.OrdinalIgnoreCase),
-                detail.PrimaryKey);
+                keyIndex >= 0 ? detail.PrimaryKey : null);
         }, e => new DetailView(ScreenStatus.ConfigError, Note: e), ct);
     }
 
@@ -282,6 +292,7 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
         var branches = (ctx.Req.BranchId ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (src.Contains("BranchID") && branches.Length > 0 && form.Setting("SPA3") != "1")
             q.Where.Add($"{q.Col("BranchID")} IN ({string.Join(", ", branches.Select(b => q.Param(b)))}) OR {q.Col("BranchID")} IS NULL");
+        if (slot.FilterWeb is not null) q.Where.Add(q.Fragment(slot.FilterWeb, $"{slot.Id}.FTW"));
         if (includeToolbarFilter && slot.Filter is not null) q.Where.Add(q.Fragment(slot.Filter, $"{slot.Id}.FTR"));
         if (slot.FilterEx is null) return;
         if (slot.FilterExCheck is not null)
@@ -378,6 +389,7 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
         // TPV1…TPV5: tab chi tiết 1…5 — 0 mọi người, 1 Manager, 4 Admin.
         var n = Array.IndexOf(FormMeta.SlotIds.ToArray(), detail.Id);
         var p = n is >= 1 and <= 5 ? form.SettingInt($"TPV{n}", 0) : 0;
+        if (detail.HideOnHideAmount && ctx.Perm.HideAmount) return false;
         return p switch { 1 => ctx.Perm.SeesAll, 4 => ctx.Perm.Admin, _ => true };
     }
 

@@ -107,4 +107,25 @@ Xem [deploy/README.md](../deploy/README.md). Tóm tắt:
 - Tra cứu F4 và hiện **tên thay mã** (trạng thái, khách hàng…) theo `SY_FrmDrdwTbl`.
 - Phân trang trên server (FE chưa hỗ trợ `pager`), lưu bố cục lưới (`web.GridLayout`, M4).
 - Ô lọc kiểu khác (kỳ 9, quý 14, UserFilterCombo 18…), `CostCenterID` của người dùng, ủy quyền `SY_UserAuthority` (MedData không có bảng).
-- Form viết tay (Phiếu thu/chi, Mua hàng…): viết riêng từng form.
+- ~~Form viết tay (Phiếu thu/chi, Mua hàng…): viết riêng từng form.~~ Xong phần xem (2026-11-12) bằng tệp mô tả, xem dưới.
+
+## Form viết tay — tệp mô tả (2026-11-12)
+
+- `src/WebErp.Erp/Metadata/Overlays/<FormName>.json` mô tả lại cách form viết tay nạp dữ liệu bằng **đúng mô hình slot của
+  `SY_FrmCfg`** (T0 bảng chính, T1… tab: bảng, khóa, cột nối MDL, join tên, ẩn, tổng, ACP, DCP). Engine metadata dựng màn như mọi
+  form khác; không viết giao diện riêng.
+- Key riêng của web:
+  - `FTW`: điều kiện luôn áp, vd `isBank = 1` theo Para; không bị cấu hình DB đè;
+  - `HHA` = 1: ẩn cả tab khi bị ẩn tiền (lưới Định khoản);
+  - `OPT` = 1: bỏ tab nếu bảng không có trong DB của khách (lịch sử trạng thái…).
+- `useDbConfig`: form viết tay có đọc `SY_FrmCfg` (T0/T1…) ⇒ cấu hình DB của khách đứng trước, tệp bù phần thiếu.
+  3 form luôn viết cứng (`AP_PurchaseAllocateFrm`, `AR_StockInputFrm`, `AR_StockOutFrm`) chỉ dùng tệp.
+- Đã có 16 form chứng từ:
+  - quỹ: Phiếu thu/chi (+ ngân hàng);
+  - mua bán: Mua hàng (+ nhập khẩu), Trả NCC, Mua/Bán dịch vụ, Hóa đơn bán (+ xuất khẩu), Hàng bán trả lại;
+  - kế toán và kho: Phiếu kế toán, Phân rã, Nhập/Xuất/Chuyển kho, Phân bổ chi phí, Theo dõi nhập/xuất.
+  
+  Nguồn: mã dịch ngược (số dòng ghi ở đầu mỗi tệp) + cột thật MedData. Sửa trực tiếp tệp JSON khi cần.
+- Chạy thử trên bản sao MedData: 19 biến thể theo Para đều mở được danh sách, chứng từ và tab; validator 0 lỗi.
+- Còn: ~29 form hệ thống (sao lưu, phân quyền, khai báo kỳ…) chưa làm. Chỉ làm phần cần trên web (người dùng / phân quyền ở
+  trang quản trị).

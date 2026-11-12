@@ -1,0 +1,38 @@
+// Theo dõi phiếu nhập kho. Nguồn: mã dịch ngược ERP/AR_StockInputFrm.cs:1224-1268; cột kiểm trên MedData 2026-11-12.
+// Form luôn viết cứng (không đọc SY_FrmCfg): chỉ dùng tệp này.
+{
+  "form": "AR_StockInputFrm",
+  "formType": "EDIT",
+  "caption": "Theo dõi phiếu nhập kho",
+  "useDbConfig": false,
+  "cfg": {
+    "SP": "9",
+    "DFP": "DocumentDate",
+    "T0": {
+      "TN": "vIS_Input",
+      "PK": "DocumentID",
+      "SO": "DocumentDate desc, DocumentID desc",
+      "HDE": "LinkID;MaTrangThai;SourceID",
+      "SUM": "BaseTotal"
+    },
+    "T1": {
+      "TN": "vIS_InputDetail",
+      "PK": "UserAutoID",
+      "MDL": "DocumentID",
+      "DCP": "Chi tiết hàng",
+      "HDE": "DocumentID",
+      "SUM": "Amount;Quantity",
+      "SO": "ItemID, Quantity desc"
+    },
+    "T2": {
+      "TN": "vIS_InputCoupon",
+      "PK": "UserAutoID",
+      "MDL": "DocumentID",
+      "DCP": "Phiếu giảm giá / Mua hàng",
+      "HDE": "DocumentID",
+      "SUM": "TriGia",
+      "SO": "CouponSeri",
+      "OPT": "1"
+    }
+  }
+}

@@ -1,0 +1,38 @@
+// Theo dõi phiếu xuất kho. Nguồn: mã dịch ngược ERP/AR_StockOutFrm.cs:1300-1326; cột kiểm trên MedData 2026-11-12.
+// Form luôn viết cứng (không đọc SY_FrmCfg): chỉ dùng tệp này.
+{
+  "form": "AR_StockOutFrm",
+  "formType": "EDIT",
+  "caption": "Theo dõi phiếu xuất kho",
+  "useDbConfig": false,
+  "cfg": {
+    "SP": "9",
+    "DFP": "DocumentDate",
+    "T0": {
+      "TN": "vIS_Output",
+      "PK": "DocumentID",
+      "SO": "DocumentDate desc, DocumentID desc",
+      "HDE": "LinkID;MaTrangThai;SourceID",
+      "SUM": "BaseTotal"
+    },
+    "T1": {
+      "TN": "vIS_OutputDetail",
+      "PK": "UserAutoID",
+      "MDL": "DocumentID",
+      "DCP": "Chi tiết hàng",
+      "HDE": "DocumentID",
+      "SUM": "Amount;Quantity;TrongLuong;TheTich",
+      "SO": "ItemID, Quantity desc"
+    },
+    "T2": {
+      "TN": "vIS_OutputCoupon",
+      "PK": "UserAutoID",
+      "MDL": "DocumentID",
+      "DCP": "Phiếu giảm giá / mua hàng",
+      "HDE": "DocumentID",
+      "SUM": "TriGia",
+      "SO": "CouponSeri",
+      "OPT": "1"
+    }
+  }
+}

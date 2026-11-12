@@ -1,0 +1,68 @@
+// Phiếu chi. Nguồn: mã dịch ngược ERP/CS_PaymentFrm.cs:1309, 2028-2064, 2140, 2215-2226; cột kiểm trên MedData 2026-11-12.
+// Form viết tay có đọc SY_FrmCfg (T0/T1… nếu đủ TN+PK) nên cấu hình DB đứng trước, tệp này bù phần thiếu.
+{
+  "form": "CS_PaymentFrm",
+  "formType": "EDIT",
+  "caption": "Phiếu chi",
+  "useDbConfig": true,
+  "cfg": {
+    "SP": "9",
+    "DFP": "DocumentDate",
+    "T0": {
+      "TN": "CS_PaymentTbl",
+      "PK": "DocumentID",
+      "SO": "DocumentDate desc, DocumentID desc",
+      "HDE": "SearchField;isBank",
+      "SUM": "BaseTotal",
+      "ACP": "BaseTotal",
+      "GD2": "DocumentID;DocumentDate;ObjectID;ObjectName;Memo;BaseTotal;CurrencyID;CashAccountID;Status"
+    },
+    "T1": {
+      "TN": "CS_PaymentDetailTbl",
+      "PK": "UserAutoID",
+      "MDL": "DocumentID",
+      "DCP": "Chi tiết chi tiền",
+      "HDE": "DocumentID",
+      "SUM": "SourceAmount;Amount;VATAmount;TotalAmount"
+    },
+    "T2": {
+      "TN": "CS_VATInvoiceTbl",
+      "PK": "UserAutoID",
+      "MDL": "PaymentID",
+      "DCP": "Thông tin hóa đơn",
+      "HDE": "PaymentID;ReceiptID",
+      "SUM": "Amount;VATAmount"
+    },
+    "T3": {
+      "TN": "CS_PaymentAcc2View",
+      "PK": "DocumentID",
+      "MDL": "DocumentID",
+      "DCP": "Định khoản",
+      "HDE": "DocumentID",
+      "SUM": "SourceAmount;Amount",
+      "SO": "DocumentID",
+      "HHA": "1",
+      "ACP": "SourceAmount;Amount"
+    },
+    "T4": {
+      "TN": "CS_PaymentStatusLogTbl",
+      "PK": "UserAutoID",
+      "MDL": "DocumentID",
+      "DCP": "Các trạng thái duyệt",
+      "HDE": "DocumentID",
+      "OPT": "1"
+    }
+  },
+  "para": {
+    "": {
+      "T0": {
+        "FTW": "CS_PaymentTbl.isBank = 0"
+      }
+    },
+    "Bank": {
+      "T0": {
+        "FTW": "CS_PaymentTbl.isBank = 1"
+      }
+    }
+  }
+}

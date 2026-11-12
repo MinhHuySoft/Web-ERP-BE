@@ -40,6 +40,15 @@ public sealed class ErpMetadata(ErpConnectionFactory connections, TimeProvider t
                 "FROM dbo.SY_FrmLstTbl WHERE FormID=@f", formName, ct));
             var cfg = (await c.QueryAsync<FrmCfgRow>(Cmd(
                 "SELECT KeyID,SubID,KeyValue,SubValue FROM dbo.SY_FrmCfg WHERE FID=@f AND COALESCE(KeyValue,'')<>'' ORDER BY UserAutoID", runtimeName, ct))).ToList();
+            // Form viết tay có tệp mô tả: dùng dòng SY_FrmLstTbl của tệp (lớp viết tay luôn che dòng cùng tên trong DB). Cấu hình
+            // SY_FrmCfg của DB chỉ giữ khi form viết tay có đọc nó (useDbConfig), và đứng trước để cấu hình của khách thắng.
+            var para = runtimeName.Length > formName.Length + 1 ? runtimeName[(formName.Length + 1)..] : null;
+            if (FormOverlays.Get(formName, para) is { } overlay)
+            {
+                lst = overlay.Lst;
+                if (!overlay.UseDbConfig) cfg.Clear();
+                cfg.AddRange(overlay.Rows);
+            }
             if (lst is null && cfg.Count == 0) return (FormMeta?)null;
             var flt = (await c.QueryAsync<FrmFltRow>(Cmd(
                 "SELECT KeyID,ColumnID,Caption,Type,Source,ValueColumn,DisplayColumn,Operator,WhereString,DefaultValue,IsDisable " +
