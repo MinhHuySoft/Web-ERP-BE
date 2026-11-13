@@ -1,7 +1,7 @@
 // Thiết lập kết nối API với VIETTEL POST. Nguồn: ERP/ePostSettingViettelFrm.cs:1241-1327; ERP.ePOST/VIETTELPost_API.cs:381-440.
 // KHÔNG BAO GIỜ gửi Password…Password6 (mã hóa bằng khóa cố định trong exe = như chữ thường): SE liệt kê cột, BE chặn mọi cột mật khẩu.
 // Không gọi API ngoài. Lưới phụ là tab độc lập (IND).
-// Lọc chi nhánh: WinForms không lọc ở form này; web vẫn lọc theo chi nhánh của người dùng (chờ chủ dự án chốt SPA3).
+// Không lọc chi nhánh, như WinForms (form viết tay không gọi GetBranchFilter).
 {
   "form": "ePostSettingViettelFrm",
   "formType": "EDIT",

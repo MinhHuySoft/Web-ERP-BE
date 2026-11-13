@@ -1,5 +1,6 @@
 // Theo dõi phiếu nhập kho. Nguồn: mã dịch ngược ERP/AR_StockInputFrm.cs:1224-1268; cột kiểm trên MedData 2026-11-12.
 // Form luôn viết cứng (không đọc SY_FrmCfg): chỉ dùng tệp này.
+// Form tự lọc chi nhánh của người dùng (ô chi nhánh khóa khi người dùng có chi nhánh, ERP/AR_StockInputFrm.cs:1259-1269) → WBR.
 {
   "form": "AR_StockInputFrm",
   "formType": "EDIT",
@@ -8,6 +9,7 @@
   "cfg": {
     "SP": "9",
     "DFP": "DocumentDate",
+    "WBR": "1",
     "T0": {
       "TN": "vIS_Input",
       "PK": "DocumentID",

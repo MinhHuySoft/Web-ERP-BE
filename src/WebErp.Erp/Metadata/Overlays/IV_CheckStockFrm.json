@@ -1,6 +1,6 @@
 // Kiểm kê hàng hóa. Nguồn: ERP/IV_CheckStockFrm.cs:826-942. Form đọc T0.FTX + thiết lập hiển thị T0/T1 của SY_FrmCfg.
 // WinForms luôn lọc người tạo với user thường (FTW), kể cả khi DB có SPA2.
-// Lọc chi nhánh: WinForms không lọc ở form này; web vẫn lọc theo chi nhánh của người dùng (chờ chủ dự án chốt SPA3).
+// Không lọc chi nhánh, như WinForms (form viết tay không gọi GetBranchFilter).
 {
   "form": "IV_CheckStockFrm",
   "formType": "EDIT",

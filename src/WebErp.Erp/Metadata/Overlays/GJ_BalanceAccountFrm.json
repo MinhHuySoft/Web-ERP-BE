@@ -1,6 +1,6 @@
 // Số dư tài khoản. Nguồn: ERP/GJ_BalanceAccountFrm.cs:306-340 (viết cứng :325; isBalance = 1 luôn áp). Đọc SY_FrmCfg.
 // WinForms không lọc người tạo ở form số dư (SPA2).
-// Lọc chi nhánh: WinForms không lọc ở form này; web vẫn lọc theo chi nhánh của người dùng (chờ chủ dự án chốt SPA3).
+// Không lọc chi nhánh, như WinForms (form viết tay không gọi GetBranchFilter).
 {
   "form": "GJ_BalanceAccountFrm",
   "formType": "LIST",

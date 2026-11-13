@@ -1,7 +1,7 @@
 // Định nghĩa phân bổ chi phí trả trước. Nguồn: ERP/GJ_AllocateSetupFrm.cs:1128-1167 (bảng), :836-1057 (ô phiếu).
 // Đọc SY_FrmCfg (LoadLayout) nhưng bảng viết cứng. Form tự tạo GJ_AllocatePeriodSetupTbl và cột NgayChungTu khi mở → OPT.
 // WinForms luôn lọc người tạo với user thường (:1175-1182), kể cả khi DB có SPA2 (FTW).
-// Lọc chi nhánh: WinForms không lọc ở form này; web vẫn lọc theo chi nhánh của người dùng (chờ chủ dự án chốt SPA3).
+// Không lọc chi nhánh, như WinForms (form viết tay không gọi GetBranchFilter).
 {
   "form": "GJ_AllocateSetupFrm",
   "formType": "EDIT",

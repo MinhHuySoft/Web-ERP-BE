@@ -1,5 +1,5 @@
 // Thanh lý tài sản. Nguồn: ERP/FA_LiquidateFrm.cs:482-540; không đọc SY_FrmCfg.
-// Lọc chi nhánh: WinForms không lọc ở form này; web vẫn lọc theo chi nhánh của người dùng (chờ chủ dự án chốt SPA3).
+// Không lọc chi nhánh, như WinForms (form viết tay không gọi GetBranchFilter).
 {
   "form": "FA_LiquidateFrm",
   "formType": "EDIT",

@@ -1,6 +1,7 @@
 // Trích khấu hao tài sản: phiếu GJ 'FA' theo kỳ. Nguồn: ERP/FA_DepreciateFrm.cs (như EQ_AllocateFrm), :931-962.
 // WinForms hiện đúng 1 phiếu GJ 'FA' của kỳ (ngày = cuối kỳ, theo chi nhánh); web: danh sách phiếu 'FA' trong kỳ → mở phiếu.
 // Phiếu do SP sinh nên không lọc người tạo (SPA2). Không đọc SY_FrmCfg.
+// Ô chi nhánh mặc định và khóa theo chi nhánh của người dùng → lọc chi nhánh (WBR).
 {
   "form": "FA_DepreciateFrm",
   "formType": "EDIT",
@@ -10,6 +11,7 @@
     "SP": "9",
     "DFP": "DocumentDate",
     "SPA2": "1",
+    "WBR": "1",
     "T1V": "Chứng từ",
     "WACT": "Tính khấu hao;Sửa khấu hao;Xóa khấu hao;In bảng khấu hao",
     "T0": {

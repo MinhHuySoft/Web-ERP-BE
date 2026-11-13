@@ -1,5 +1,5 @@
 // Thanh lý / Hủy công cụ dụng cụ. Nguồn: ERP/EQ_LiquidateFrm.cs:486-543; không đọc SY_FrmCfg.
-// Lọc chi nhánh: WinForms không lọc ở form này; web vẫn lọc theo chi nhánh của người dùng (chờ chủ dự án chốt SPA3).
+// Không lọc chi nhánh, như WinForms (form viết tay không gọi GetBranchFilter).
 {
   "form": "EQ_LiquidateFrm",
   "formType": "EDIT",

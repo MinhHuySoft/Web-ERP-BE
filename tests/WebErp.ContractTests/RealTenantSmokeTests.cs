@@ -77,6 +77,15 @@ public sealed class RealTenantSmokeTests(FrontendValidator validator) : IClassFi
                     lines.Add($"   {r["MenuID"]} | {r["FormName"]} | {(r.TryGetValue("Para", out var pa) ? pa : null)} | {(r.TryGetValue("VN", out var vn) ? vn : null)}");
                 continue;
             }
+            if (n.StartsWith("flt:", StringComparison.Ordinal))
+            {
+                var rows = await c.QueryAsync("SELECT * FROM dbo.SY_FrmFltTbl WHERE FormID = @f ORDER BY KeyID", new { f = n[4..] });
+                lines.Add($"== {n}:");
+                foreach (IDictionary<string, object?> r in rows)
+                    lines.Add("   " + string.Join(" | ", r.Where(x => x.Value is not null and not DBNull && x.Value.ToString() is { Length: > 0 } && x.Key != "UserAutoID")
+                        .Select(x => $"{x.Key}={x.Value!.ToString()!.ReplaceLineEndings(" ")}")));
+                continue;
+            }
             if (n.StartsWith("group:", StringComparison.Ordinal))
             {
                 // group:Bảng:Cột — đếm số dòng theo giá trị của một cột cờ (tên kiểm bằng sys.columns, không chép dữ liệu).
@@ -178,7 +187,9 @@ public sealed class RealTenantSmokeTests(FrontendValidator validator) : IClassFi
             // WEBERP_REAL_QUERY: query string áp cho mọi danh sách, vd "FromDate=2020-01-01" để có dữ liệu.
             var query = (Environment.GetEnvironmentVariable("WEBERP_REAL_QUERY") ?? "").Split('&', StringSplitOptions.RemoveEmptyEntries)
                 .Select(x => x.Split('=', 2)).ToDictionary(x => x[0], x => x.Length > 1 ? Uri.UnescapeDataString(x[1]) : "");
-            var req = new ScreenRequest(tenant, user, null, parts[0], parts.Length > 1 ? parts[1] : null, query);
+            // WEBERP_REAL_BRANCH: chi nhánh của phiên (vd "MB") để thử lọc chi nhánh; mặc định không có.
+            var req = new ScreenRequest(tenant, user, Environment.GetEnvironmentVariable("WEBERP_REAL_BRANCH") is { Length: > 0 } br ? br : null,
+                parts[0], parts.Length > 1 ? parts[1] : null, query);
             var list = await screens.OpenListAsync(req, CancellationToken.None);
             report.Add($"{spec}: {list.Status} {list.Note} rows={list.Rows?.Count} total={list.Total}");
             if (list.Status != ScreenStatus.Ok) continue;

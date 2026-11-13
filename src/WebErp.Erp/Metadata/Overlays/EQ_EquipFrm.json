@@ -1,6 +1,6 @@
 // Lý lịch công cụ dụng cụ. Nguồn: ERP/EQ_EquipFrm.cs:1588-1700. Dữ liệu viết cứng; LoadLayout chỉ cho thiết lập hiển thị.
 // Tệp đính kèm: chỉ siêu dữ liệu (không Content/Base64Content). Web không chạy UPDATE/ALTER/CREATE TABLE lúc mở form.
-// Lọc chi nhánh: WinForms không lọc ở form này; web vẫn lọc theo chi nhánh của người dùng (chờ chủ dự án chốt SPA3).
+// Không lọc chi nhánh, như WinForms (form viết tay không gọi GetBranchFilter).
 {
   "form": "EQ_EquipFrm",
   "formType": "EDIT",

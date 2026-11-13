@@ -149,8 +149,14 @@ Xem [deploy/README.md](../deploy/README.md). Tóm tắt:
 - Quyền mở màn như WinForms: `MainFrm.MenuClick` không kiểm `Permiss.View`, cửa chặn là menu của người dùng (Host chỉ mở màn có
   trong `{Module}_GetUserMenuFnc`; user `Admin` thấy mọi menu). Cờ quyền chỉ quyết định phạm vi dữ liệu.
 - Lọc như form viết tay của WinForms: không lọc người tạo ở form số dư, phiếu do SP sinh (SPA2); lọc người tạo viết cứng ở tài sản,
-  kiểm kê, định nghĩa phân bổ (FTW, kể cả khi DB có SPA2). **Chờ chủ dự án chốt:** form viết tay của WinForms không lọc chi nhánh;
-  web vẫn lọc theo chi nhánh của người dùng (chặt hơn) cho tới khi chốt.
+  kiểm kê, định nghĩa phân bổ (FTW, kể cả khi DB có SPA2).
+- Lọc chi nhánh (chủ dự án chốt 2026-11-13: **giống ERP**): chỉ form động tự lọc theo chi nhánh của người dùng
+  (`FrmFormList`/`FrmFormListEdit`/`FrmMasterDetail` gọi `GetBranchFilter`, trừ SPA3 = 1). Form viết tay không lọc, SPA3 của DB không
+  áp; 5 form tự lọc chi nhánh trong mã đặt key web `WBR` = 1 (theo dõi phiếu nhập / xuất kho; phân bổ chi phí, phân bổ CCDC, trích
+  khấu hao có ô chi nhánh khóa theo người dùng).
+- Sửa lỗi khi phiên có chi nhánh: ô lọc trên toolbar (`SY_FrmFltTbl`, mặc định `{BranchID}`) ghép cột trần, slot có join tới bảng
+  cùng tên cột báo "Ambiguous column name" (hóa đơn bán, xuất kho, chuyển kho). Cột của bảng nguồn giờ ghi kèm tên bảng, kể cả trong
+  mẫu `WhereString`. Chạy thử cả menu với phiên chi nhánh MB và không chi nhánh: 0 màn lỗi.
 - Chạy thử trên bản sao MedData: 170 danh sách, 74 chứng từ, 156 tab chi tiết, 13 tab độc lập, 484 lần F4; validator 0 lỗi.
 - Gần đúng so với WinForms (ghi ở đầu từng tệp): cây menu hiện dạng danh sách (phân quyền, ngôn ngữ), phân bổ / khấu hao hiện danh
   sách phiếu của kỳ thay cho ô chọn kỳ, duyệt chứng từ chưa có tab chi tiết theo phân hệ, tab "Daily log" của user log chưa làm.
