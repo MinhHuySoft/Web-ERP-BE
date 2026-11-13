@@ -13,5 +13,7 @@
   <ItemGroup>
     <!-- Tep mo ta form viet tay (overlay), doc luc chay. -->
     <EmbeddedResource Include="Metadata\Overlays\*.json" LogicalName="WebErp.Overlays.%(Filename)%(Extension)" />
+    <!-- Migration schema web (QĐ-02), chạy bằng lệnh quản trị. -->
+    <EmbeddedResource Include="WebSchema\Migrations\*.sql" LogicalName="WebErp.Migrations.%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>
