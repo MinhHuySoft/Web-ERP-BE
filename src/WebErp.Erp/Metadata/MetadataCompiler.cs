@@ -14,6 +14,10 @@ public sealed record FrmLstRow(string FormID, string? FormType, string? CaptionV
 public sealed record FrmFltRow(string? KeyID, string? ColumnID, string? Caption, int? Type, string? Source, string? ValueColumn,
     string? DisplayColumn, int? Operator, string? WhereString, string? DefaultValue, bool? IsDisable);
 
+/// <summary>Các cột <c>SY_FrmDrdwTbl</c> web dùng (cột kiểm trên MedData 2026-11-13; DB cũ có thể thiếu DisplayMember2/isInvisible).</summary>
+public sealed record FrmDrdwRow(string? GridName, string? ColumnID, string? Type, string? Source, string? ValueColumn, string? DisplayColumn,
+    string? DisplayMember2, string? ColumnArr, string? ParaArr, string? Caption, bool? IsInvisible);
+
 /// <summary>
 /// Dòng metadata → <see cref="FormMeta"/> (tài liệu 10 §4). Không chạm DB. Dòng trùng khóa: lấy dòng đầu; giá trị rỗng = mặc định.
 /// </summary>
@@ -98,7 +102,23 @@ public static class MetadataCompiler
             FilterWeb = Get("FTW"),
             HideOnHideAmount = Get("HHA") == "1",
             Optional = Get("OPT") == "1",
+            GridName = Get("GN"),
         };
+    }
+
+    /// <summary>Dòng <c>SY_FrmDrdwTbl</c> (đã lọc IsDisable, dòng của tên form chạy trước) → tra cứu; trùng (lưới, cột) lấy dòng đầu.</summary>
+    public static IReadOnlyList<DropdownMeta> Dropdowns(IEnumerable<FrmDrdwRow> rows)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var result = new List<DropdownMeta>();
+        foreach (var r in rows)
+        {
+            var column = Blank(r.ColumnID);
+            if (column is null || !seen.Add($"{r.GridName?.Trim()}|{column}")) continue;
+            result.Add(new DropdownMeta(r.GridName?.Trim() ?? "", column, r.Type?.Trim() ?? "", Blank(r.Source), Blank(r.ValueColumn),
+                Blank(r.DisplayColumn), Blank(r.DisplayMember2), Blank(r.ColumnArr), Blank(r.ParaArr), Blank(r.Caption), r.IsInvisible == true));
+        }
+        return result;
     }
 
     private static List<FilterMeta> Filters(IReadOnlyList<FrmFltRow> rows) =>

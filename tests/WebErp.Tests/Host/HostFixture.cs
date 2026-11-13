@@ -51,6 +51,15 @@ public sealed class FakeErp : IErpUsers, IErpMenu, IErpScreens
 
     public Task<DetailView> OpenDetailAsync(ScreenRequest request, string key, string slotId, CancellationToken ct) =>
         Task.FromResult(slotId == "T1" ? SampleScreens.Detail() : new DetailView(ScreenStatus.NotFound));
+
+    /// <summary>Tra cứu gần nhất: (ô, chữ gõ, tham số).</summary>
+    public (string Field, string Text, IReadOnlyList<string> Paras)? LastLookup { get; private set; }
+
+    public Task<LookupView> LookupAsync(ScreenRequest request, string field, string text, IReadOnlyList<string> paras, CancellationToken ct)
+    {
+        LastLookup = (field, text, paras);
+        return Task.FromResult(field == "ObjectID" ? SampleScreens.Lookup() : new LookupView(ScreenStatus.NotFound));
+    }
 }
 
 /// <summary>

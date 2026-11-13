@@ -20,12 +20,13 @@ public static class SampleScreens
         new("isLock", "Đã khóa", "bool", null, false, false),
         new("Price", "Giá", "money", 0, false, true),
         new("RateExchange", "Tỷ giá", "number", 2, true, false),
+        new("StatusID", "Trạng thái", "text", null, false, false, Names: new Dictionary<string, string> { ["1"] = "Đã duyệt" }),
     ];
 
     public static ListView List() => new(ScreenStatus.Ok, Form, Columns,
         [
-            ["PO/001", new DateTime(2026, 11, 9, 0, 0, 0, DateTimeKind.Unspecified), false, 1234567.5m, 1m],
-            ["PO/002", new DateTime(2026, 11, 7, 0, 0, 0, DateTimeKind.Unspecified), true, null, null],
+            ["PO/001", new DateTime(2026, 11, 9, 0, 0, 0, DateTimeKind.Unspecified), false, 1234567.5m, 1m, 1],
+            ["PO/002", new DateTime(2026, 11, 7, 0, 0, 0, DateTimeKind.Unspecified), true, null, null, 9],
         ],
         ["PO/001", "PO/002"], 1500, new Dictionary<string, decimal> { ["Price"] = 1234567.5m },
         [
@@ -34,7 +35,7 @@ public static class SampleScreens
             new ViewFilter("BranchID", "Chi nhánh", "select", "HN", [("", "(Tất cả)"), ("HN", "HN — Hà Nội")]),
             new ViewFilter("q", "Tìm nhanh", "search", ""),
         ],
-        "PurchaseRequestID", CanOpenRecord: true);
+        "PurchaseRequestID", CanOpenRecord: true, Page: 1, PageSize: 1000);
 
     public static RecordView Record(string key) => new(ScreenStatus.Ok, Form, key, "PurchaseRequestID",
         [
@@ -44,10 +45,16 @@ public static class SampleScreens
                 new ViewField("PurchaseDate", "Ngày đề xuất", "date", new DateTime(2026, 11, 9, 0, 0, 0, DateTimeKind.Unspecified), 4, 1, false, null),
                 new ViewField("isLock", "Đã khóa", "checkbox", true, 4, 1, false, null),
                 new ViewField("Price", "Giá", "money", 1234567.5m, 8, 1, true, 0),
+                new ViewField("ObjectID", "Nhà cung cấp", "lookup", "NCC01", 12, 1, false, null, Text: "Công ty A", LookupParas: ["HN"]),
                 new ViewField("Notes", "Ghi chú <dài>", "textarea", "Dòng 1\nDòng 2", 40, 2, true, null),
             ]),
         ],
         [new ViewDetailTab("T1", "Hàng hóa đề nghị")]);
+
+    /// <summary>Kết quả tra cứu F4 của ô ObjectID (cột ẩn dùng để điền trường).</summary>
+    public static LookupView Lookup() => new(ScreenStatus.Ok,
+        [new("ObjectID", "Mã", "text", null, false, false), new("ObjectName", "Tên", "text", null, false, false), new("TaxCode", "MST", "text", null, true, false)],
+        [["NCC01", "Công ty A", "0101"], ["NCC02", "Công ty <B>", null]], ["NCC01", "NCC02"], ["Công ty A", "Công ty <B>"], 7);
 
     public static DetailView Detail() => new(ScreenStatus.Ok, "T1",
         [new("ItemID", "Mã hàng", "text", null, false, false), new("Quantity", "Số lượng", "quantity", 2, false, true)],

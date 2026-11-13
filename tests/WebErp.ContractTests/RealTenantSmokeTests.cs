@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.DependencyInjection;
 using WebErp.Config;
 using WebErp.Core.Metadata;
+using WebErp.Core.Tenancy;
 using WebErp.Erp.Connection;
 using WebErp.Erp.Metadata;
 using WebErp.Erp.Screens;
@@ -65,6 +66,24 @@ public sealed class RealTenantSmokeTests(FrontendValidator validator) : IClassFi
                 lines.Add($"== SY_FrmCtrTbl cột: {ctrCols}");
                 var rows = await c.QueryAsync("SELECT TOP 40 * FROM dbo.SY_FrmCtrTbl WHERE FormID = @f", new { f = n[4..] });
                 foreach (IDictionary<string, object?> r in rows) lines.Add("   " + string.Join(" | ", r.Where(x => x.Value is not null and not DBNull).Select(x => $"{x.Key}={x.Value}")));
+                continue;
+            }
+            if (n == "menu:")
+            {
+                if (!TenantNames.IsValidModule(tenant.ModuleId)) throw new InvalidOperationException("module");
+                var rows = await c.QueryAsync($"SELECT * FROM dbo.{tenant.ModuleId.ToUpperInvariant()}_Menu WHERE COALESCE(FormName,'')<>'' ORDER BY MenuID");
+                lines.Add("== menu:");
+                foreach (IDictionary<string, object?> r in rows)
+                    lines.Add($"   {r["MenuID"]} | {r["FormName"]} | {(r.TryGetValue("Para", out var pa) ? pa : null)} | {(r.TryGetValue("VN", out var vn) ? vn : null)}");
+                continue;
+            }
+            if (n.StartsWith("drdwfull:", StringComparison.Ordinal))
+            {
+                var rows = await c.QueryAsync("SELECT * FROM dbo.SY_FrmDrdwTbl WHERE FormID = @f ORDER BY GridName, ColumnID", new { f = n[9..] });
+                lines.Add($"== {n}:");
+                foreach (IDictionary<string, object?> r in rows)
+                    lines.Add("   " + string.Join(" | ", r.Where(x => x.Value is not null and not DBNull && x.Value.ToString() is { Length: > 0 } && x.Key != "UserAutoID")
+                        .Select(x => $"{x.Key}={x.Value!.ToString()!.ReplaceLineEndings(" ")}")));
                 continue;
             }
             if (n.StartsWith("drdw:", StringComparison.Ordinal))
@@ -138,7 +157,9 @@ public sealed class RealTenantSmokeTests(FrontendValidator validator) : IClassFi
             report.Add($"{spec}: {list.Status} {list.Note} rows={list.Rows?.Count} total={list.Total}");
             if (list.Status != ScreenStatus.Ok) continue;
             var urls = new ScreenUrls($"/erp/screens/{req.FormName}", req.Para, k => $"/erp/screens/{req.FormName}/{Uri.EscapeDataString(k)}",
-                (k, s) => $"/erp/screens/{req.FormName}/{Uri.EscapeDataString(k)}/tabs/{s}", $"/erp/screens/{req.FormName}");
+                (k, s) => $"/erp/screens/{req.FormName}/{Uri.EscapeDataString(k)}/tabs/{s}", $"/erp/screens/{req.FormName}",
+                Page: n => $"/erp/screens/{req.FormName}?page={n}",
+                Lookup: (f, p) => $"/erp/screens/{req.FormName}/lookups/{f}?q={{q}}" + string.Concat(p.Select((x, i) => $"&p{i}={Uri.EscapeDataString(x)}")));
             var html = MetaScreens.List(list, list.Form!.Caption, null, urls);
             await File.WriteAllTextAsync(Path.Combine(outDir, $"{req.RuntimeName}.html"), html);
             await AssertValid(html, $"{spec} danh sách");
@@ -151,6 +172,16 @@ public sealed class RealTenantSmokeTests(FrontendValidator validator) : IClassFi
             var recHtml = MetaScreens.Record(rec, list.Form.Caption, null, urls, "__RequestVerificationToken", "test");
             await File.WriteAllTextAsync(Path.Combine(outDir, $"{req.RuntimeName}.record.html"), recHtml);
             await AssertValid(recHtml, $"{spec} chứng từ");
+            // Tra cứu F4 của vài ô có danh sách chọn: rỗng và có chữ gõ.
+            foreach (var lf in (rec.Tabs ?? []).SelectMany(t => t.Fields).Where(x => x.Control == "lookup").Take(6))
+            {
+                foreach (var text in new[] { "", "a" })
+                {
+                    var lk = await screens.LookupAsync(req, lf.Field, text, lf.LookupParas ?? [], CancellationToken.None);
+                    report.Add($"    F4 {lf.Field} '{text}': {lk.Status} {lk.Note} rows={lk.Rows?.Count} total={lk.Total}");
+                    if (lk.Status == ScreenStatus.Ok) await AssertValid(MetaScreens.Lookup(lk, lf.Caption), $"{spec} F4 {lf.Field}");
+                }
+            }
             foreach (var d in rec.Details ?? [])
             {
                 var det = await screens.OpenDetailAsync(req, key, d.Id, CancellationToken.None);

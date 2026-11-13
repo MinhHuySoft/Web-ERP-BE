@@ -23,6 +23,32 @@ public sealed record FormMeta(
 {
     public bool IsEdit => FormType.Equals("EDIT", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>Cấu hình tra cứu / danh sách chọn (<c>SY_FrmDrdwTbl</c>, tài liệu 11 §2.1), dòng của tên form chạy đứng trước.</summary>
+    public IReadOnlyList<DropdownMeta> Dropdowns { get; init; } = [];
+
+    /// <summary>Tra cứu của ô trên chứng từ: <c>GridName</c> rỗng, <c>ColumnID</c> = <c>Fld{Cột}</c> hoặc <c>{Cột}</c> (FormControler.SetEditorArr).</summary>
+    public DropdownMeta? MasterDropdown(string field) => Dropdowns.FirstOrDefault(d => d.Grid.Length == 0
+        && (d.Column.Equals(field, StringComparison.OrdinalIgnoreCase) || d.Column.Equals("Fld" + field, StringComparison.OrdinalIgnoreCase)));
+
+    /// <summary>Tra cứu của một cột lưới của slot (FormControler.SetDropdownFromConfig: lọc theo tên lưới).</summary>
+    public DropdownMeta? GridDropdown(SlotMeta slot, string field)
+    {
+        var grids = GridNames(slot);
+        return Dropdowns.FirstOrDefault(d => d.Grid.Length > 0 && d.Column.Equals(field, StringComparison.OrdinalIgnoreCase)
+            && grids.Contains(d.Grid, StringComparer.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Tên lưới WinForms của slot: key web <c>GN</c> nếu có; không thì theo form metadata (FrmFormList/FrmFormListEdit: <c>grdList</c>,
+    /// FrmMasterDetail/FrmMasterEditTop: <c>grdListDoc</c>; T1 <c>grdChitiet</c>, T2… <c>grdChitiet2</c>…<c>grdChitiet19</c>).
+    /// </summary>
+    public static IReadOnlyList<string> GridNames(SlotMeta slot)
+    {
+        if (slot.GridName is { Length: > 0 } gn) return gn.Split([';', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var i = SlotIds.ToList().IndexOf(slot.Id.ToUpperInvariant());
+        return i switch { 0 => ["grdList", "grdListDoc"], 1 => ["grdChitiet"], > 1 => [$"grdChitiet{i}"], _ => [] };
+    }
+
     public string? Setting(string key) => Settings.TryGetValue(key, out var v) && v.Length > 0 ? v : null;
 
     public int SettingInt(string key, int fallback) => int.TryParse(Setting(key), out var v) ? v : fallback;
@@ -82,6 +108,45 @@ public sealed record SlotMeta(
 
     /// <summary>Key web <c>OPT</c> = 1: bảng/view không có trong DB của khách thì bỏ qua tab (vd bảng lịch sử trạng thái).</summary>
     public bool Optional { get; init; }
+
+    /// <summary>Key web <c>GN</c>: tên lưới WinForms của slot (form viết tay đặt tên riêng, vd <c>grdHoaDon</c>), để khớp <c>SY_FrmDrdwTbl.GridName</c>.</summary>
+    public string? GridName { get; init; }
+}
+
+/// <summary>
+/// Một dòng <c>SY_FrmDrdwTbl</c> (tài liệu 11 §2.1). Web chỉ đọc nên dùng để: hiện tên thay mã (cột/ô có <c>DisplayColumn</c> khác
+/// <c>ValueColumn</c>, hoặc <c>DisplayMember2</c>), tra cứu F4, đổi tiêu đề (<c>Caption</c>) và ẩn cột (<c>isInvisible</c>).
+/// </summary>
+/// <param name="Grid">Tên lưới WinForms; rỗng = ô trên chứng từ.</param>
+/// <param name="Type">Rỗng/<c>Combo</c>/<c>Dropdown</c>, <c>ValueList</c>/<c>ValueLstCb</c>/<c>LangList</c> (danh sách tĩnh trong Source),
+/// <c>DropSelect</c>, <c>DropCheck</c>, <c>ColorSelct</c>…</param>
+/// <param name="ParaArr">Tham số <c>{0}</c>, <c>{1}</c>… của Source: <c>Master.Cột</c> hoặc cột cùng dòng, cách nhau <c>;</c>.</param>
+public sealed record DropdownMeta(string Grid, string Column, string Type, string? Source, string? ValueColumn, string? DisplayColumn,
+    string? DisplayMember2, string? ColumnArr, string? ParaArr, string? Caption, bool Invisible)
+{
+    public bool IsValueList => Type.Equals("ValueList", StringComparison.OrdinalIgnoreCase) || Type.Equals("ValueLstCb", StringComparison.OrdinalIgnoreCase)
+        || Type.Equals("LangList", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Danh sách chọn thường (combo/dropdown/danh sách tĩnh): ô hiện chữ của <see cref="DisplayColumn"/>. DropSelect, DropCheck,
+    /// chọn màu/ảnh/tệp giữ nguyên giá trị.</summary>
+    public bool IsList => Type.Length == 0 || IsValueList || Type.Equals("Combo", StringComparison.OrdinalIgnoreCase)
+        || Type.Equals("Dropdown", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Có tra cứu F4 được (có cột giá trị và nguồn): danh sách thường hoặc form chọn (DropSelect).</summary>
+    public bool CanLookup => ValueColumn is not null && Source is not null
+        && (IsList || Type.Equals("DropSelect", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Cột chữ thay cho mã trên lưới: <see cref="DisplayColumn"/> khi khác <see cref="ValueColumn"/>.</summary>
+    public string? NameColumn => IsList && DisplayColumn is not null && ValueColumn is not null
+        && !DisplayColumn.Equals(ValueColumn, StringComparison.OrdinalIgnoreCase) ? DisplayColumn : null;
+
+    /// <summary>Chữ kèm mã trên ô chứng từ: tên thay mã, không thì cột hiển thị thứ hai của ComboX (<c>DisplayMember2</c>).</summary>
+    public string? TextColumn => NameColumn ?? (IsList ? DisplayMember2 : null);
+
+    /// <summary>Tên các tham số theo <see cref="ParaArr"/> (bỏ tiền tố <c>Master.</c>).</summary>
+    public IReadOnlyList<(string Field, bool Master)> Paras => string.IsNullOrWhiteSpace(ParaArr) ? []
+        : ParaArr.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(p => p.StartsWith("Master.", StringComparison.OrdinalIgnoreCase) ? (p[7..], true) : (p, false)).ToList();
 }
 
 /// <summary><c>Left|Inner join Table Alias on {Left}.LeftKey = Alias.RightKey Extra</c>; <see cref="Select"/> thêm vào danh sách cột.</summary>

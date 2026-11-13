@@ -16,6 +16,7 @@ namespace WebErp.Host.Endpoints;
 /// <item><c>GET /erp/screens/{FormName}[?para=]</c>: danh sách dựng từ metadata (M2), lọc bằng query string.</item>
 /// <item><c>GET /erp/screens/{FormName}/{key}</c>: xem một chứng từ (M3, <c>data-mode=view</c>).</item>
 /// <item><c>GET /erp/screens/{FormName}/{key}/tabs/{T1}</c>: lưới tab chi tiết, nạp lười.</item>
+/// <item><c>GET /erp/screens/{FormName}/lookups/{field}?q=&amp;p0=</c>: tra cứu F4 của một ô chứng từ (<c>SY_FrmDrdwTbl</c>).</item>
 /// </list>
 /// Chỉ mở được màn có trong menu của người dùng (QĐ-03, ngoại lệ bảo mật 4). Form viết tay / không có metadata / báo cáo:
 /// màn "chưa có trên web".
@@ -37,6 +38,7 @@ public static partial class ScreenEndpoints
         g.MapGet("/screens/{formName}", ListAsync);
         g.MapGet("/screens/{formName}/{key}", RecordAsync);
         g.MapGet("/screens/{formName}/{key}/tabs/{slot}", DetailAsync);
+        g.MapGet("/screens/{formName}/lookups/{field}", LookupAsync);
         g.MapGet("/reports/{formName}", ReportAsync);
     }
 
@@ -80,6 +82,26 @@ public static partial class ScreenEndpoints
         return v.Status == ScreenStatus.Ok ? HtmlResults.Page(MetaScreens.Detail(v, o.Node!.Entry.Caption)) : Fallback(v.Status, o.Node!, v.Note);
     }
 
+    private static async Task<IResult> LookupAsync(HttpContext ctx, string formName, string field, string? para, string? q, MenuService menu,
+        TimeProvider time, IErpScreens screens)
+    {
+        var o = await OpenAsync(ctx, formName, para, menu, time);
+        if (o.Stop is not null) return o.Stop;
+        if (!FormNamePattern().IsMatch(field)) return NotFound();
+        var paras = Enumerable.Range(0, 10).Select(i => ctx.Request.Query[$"p{i}"].ToString()).ToList();
+        while (paras.Count > 0 && paras[^1].Length == 0 && !ctx.Request.Query.ContainsKey($"p{paras.Count - 1}")) paras.RemoveAt(paras.Count - 1);
+        var v = await screens.LookupAsync(Request(ctx, o.Node!, new Dictionary<string, string>()), field, (q ?? "")[..Math.Min((q ?? "").Length, 100)], paras,
+            ctx.RequestAborted);
+        return v.Status switch
+        {
+            ScreenStatus.Ok => HtmlResults.Page(MetaScreens.Lookup(v, o.Node!.Entry.Caption)),
+            ScreenStatus.Forbidden => HtmlResults.Error(StatusCodes.Status403Forbidden, "Không có quyền", ErpMessage.Error("Bạn không có quyền tra cứu ở màn hình này.")),
+            ScreenStatus.ConfigError => HtmlResults.Error(StatusCodes.Status422UnprocessableEntity, "Không tra cứu được",
+                ErpMessage.Error("Nguồn tra cứu của ô này có phần web chưa hỗ trợ. " + (v.Note ?? ""))),
+            _ => HtmlResults.Error(StatusCodes.Status404NotFound, "Không tìm thấy", ErpMessage.Error("Ô này không có tra cứu trên web.")),
+        };
+    }
+
     /// <summary>Phiên còn hạn, tên hợp lệ, màn có trong menu của người dùng.</summary>
     private static async Task<(MenuNode? Node, IResult? Stop)> OpenAsync(HttpContext ctx, string formName, string? para, MenuService menu, TimeProvider time)
     {
@@ -108,8 +130,13 @@ public static partial class ScreenEndpoints
         var f = node.Entry.FormName!;
         var para = string.IsNullOrEmpty(node.Entry.Para) ? null : node.Entry.Para;
         var self = $"{ctx.Request.PathBase}/erp/screens/{Uri.EscapeDataString(f)}";
+        // Trang n: giữ nguyên bộ lọc đang áp, chỉ thay "page".
+        var keep = ctx.Request.Query.Where(x => !x.Key.Equals("page", StringComparison.OrdinalIgnoreCase))
+            .SelectMany(x => x.Value.Select(v => $"{Uri.EscapeDataString(x.Key)}={Uri.EscapeDataString(v ?? "")}")).ToList();
         return new ScreenUrls(self, para, k => u.Record(f, para, k), (k, slot) => u.Detail(f, para, k, slot),
-            self + ctx.Request.QueryString.Value);
+            self + ctx.Request.QueryString.Value,
+            Page: n => self + "?" + string.Join("&", keep.Append($"page={n.ToString(System.Globalization.CultureInfo.InvariantCulture)}")),
+            Lookup: (field, paras) => u.Lookup(f, para, field, paras));
     }
 
     private static IResult Fallback(ScreenStatus status, MenuNode node, string? note) => status switch

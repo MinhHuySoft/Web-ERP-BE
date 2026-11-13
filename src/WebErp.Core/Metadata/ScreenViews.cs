@@ -30,7 +30,22 @@ public sealed record ScreenRequest(
 
 /// <summary>Một cột đã quyết định xong (thứ tự, tiêu đề, kiểu, ẩn theo quyền đã loại ra từ trước).</summary>
 /// <param name="Type"><c>text</c>, <c>number</c>, <c>money</c>, <c>quantity</c>, <c>percent</c>, <c>date</c>, <c>datetime</c>, <c>bool</c>.</param>
-public sealed record ViewColumn(string Field, string Title, string Type, int? Decimals, bool Hidden, bool Sum, int? Width = null);
+/// <param name="Names">Tên thay mã (danh sách chọn của <c>SY_FrmDrdwTbl</c>): khóa <see cref="CodeKey"/> của giá trị → chữ hiển thị.
+/// Ô vẫn giữ mã làm giá trị máy (<c>td[data-value]</c>).</param>
+public sealed record ViewColumn(string Field, string Title, string Type, int? Decimals, bool Hidden, bool Sum, int? Width = null,
+    IReadOnlyDictionary<string, string>? Names = null)
+{
+    /// <summary>Khóa so mã (bất biến, bỏ khoảng trắng cuối như SQL Server so chuỗi).</summary>
+    public static string? CodeKey(object? value) => value switch
+    {
+        null => null,
+        IFormattable f => f.ToString(null, System.Globalization.CultureInfo.InvariantCulture).TrimEnd(),
+        _ => value.ToString()?.TrimEnd(),
+    };
+
+    /// <summary>Chữ thay cho mã, null nếu cột không có tên hoặc mã không có trong danh sách.</summary>
+    public string? NameOf(object? value) => Names is not null && CodeKey(value) is { Length: > 0 } k && Names.TryGetValue(k, out var n) ? n : null;
+}
 
 /// <summary>Một ô lọc đã dựng (giá trị hiện tại đã áp mặc định).</summary>
 /// <param name="Control"><c>date</c>, <c>text</c>, <c>number</c>, <c>select</c>, <c>checkbox</c>, <c>search</c>.</param>
@@ -43,6 +58,8 @@ public enum ScreenStatus { Ok, NotSupported, NotFound, Forbidden, ConfigError }
 /// <param name="Rows">Giá trị thô theo thứ tự <see cref="Columns"/>.</param>
 /// <param name="Keys">Khóa chính từng dòng (song song với <see cref="Rows"/>).</param>
 /// <param name="Total">Tổng số dòng khớp bộ lọc (có thể lớn hơn số dòng gửi).</param>
+/// <param name="Page">Trang đang xem (từ 1).</param>
+/// <param name="PageSize">Số dòng mỗi trang; 0 = không phân trang (slot có <c>TRS</c>: WinForms chỉ lấy top N).</param>
 public sealed record ListView(
     ScreenStatus Status,
     FormMeta? Form = null,
@@ -54,10 +71,17 @@ public sealed record ListView(
     IReadOnlyList<ViewFilter>? Filters = null,
     string? KeyField = null,
     bool CanOpenRecord = false,
-    string? Note = null);
+    string? Note = null,
+    int Page = 1,
+    int PageSize = 0);
 
 /// <summary>Một ô của chứng từ đang xem.</summary>
-public sealed record ViewField(string Field, string Caption, string Control, object? Value, int Span, int Rows, bool RowStart, int? Decimals);
+/// <param name="Control"><c>text</c>, <c>textarea</c>, <c>label</c>, <c>checkbox</c>, <c>date</c>, <c>datetime</c>, số…, hoặc <c>lookup</c>
+/// (ô có danh sách chọn / tra cứu F4 của <c>SY_FrmDrdwTbl</c>).</param>
+/// <param name="Text">Chữ kèm mã của ô <c>lookup</c> (tên thay mã hoặc cột hiển thị thứ hai).</param>
+/// <param name="LookupParas">Giá trị tham số <c>{0}</c>, <c>{1}</c>… của nguồn tra cứu, lấy từ chứng từ đang xem.</param>
+public sealed record ViewField(string Field, string Caption, string Control, object? Value, int Span, int Rows, bool RowStart, int? Decimals,
+    string? Text = null, IReadOnlyList<string>? LookupParas = null);
 
 public sealed record ViewTab(string Id, string Title, IReadOnlyList<ViewField> Fields);
 
@@ -85,6 +109,19 @@ public sealed record DetailView(
     string? KeyField = null,
     string? Note = null);
 
+/// <summary>Kết quả tra cứu F4 (chuẩn 10, <c>table[data-erp=lookup-result]</c>).</summary>
+/// <param name="Values">Giá trị gán vào ô (song song với <see cref="Rows"/>).</param>
+/// <param name="Texts">Chữ hiển thị kèm mã.</param>
+/// <param name="Total">Tổng số dòng khớp (có thể lớn hơn số dòng gửi).</param>
+public sealed record LookupView(
+    ScreenStatus Status,
+    IReadOnlyList<ViewColumn>? Columns = null,
+    IReadOnlyList<object?[]>? Rows = null,
+    IReadOnlyList<string>? Values = null,
+    IReadOnlyList<string>? Texts = null,
+    int Total = 0,
+    string? Note = null);
+
 /// <summary>Màn hình dựng từ metadata ERP (M2 danh sách, M3 xem chứng từ). Chỉ đọc DB ERP.</summary>
 public interface IErpScreens
 {
@@ -93,4 +130,10 @@ public interface IErpScreens
     Task<RecordView> OpenRecordAsync(ScreenRequest request, string key, CancellationToken ct);
 
     Task<DetailView> OpenDetailAsync(ScreenRequest request, string key, string slotId, CancellationToken ct);
+
+    /// <summary>
+    /// Tra cứu F4 của một ô chứng từ: tìm <paramref name="text"/> trên các cột chữ của danh sách (như <c>SearchTopRecord</c>).
+    /// <paramref name="paras"/>: giá trị <c>{0}</c>, <c>{1}</c>… theo <c>ParaArr</c>.
+    /// </summary>
+    Task<LookupView> LookupAsync(ScreenRequest request, string field, string text, IReadOnlyList<string> paras, CancellationToken ct);
 }

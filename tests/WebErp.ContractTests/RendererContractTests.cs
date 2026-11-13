@@ -11,7 +11,9 @@ public sealed class RendererContractTests(FrontendValidator validator) : IClassF
 {
     private static readonly ScreenUrls MetaUrls = new("/erp/screens/AP_PurposeRequestListFrm", null,
         k => "/erp/screens/AP_PurposeRequestListFrm/" + Uri.EscapeDataString(k),
-        (k, s) => $"/erp/screens/AP_PurposeRequestListFrm/{Uri.EscapeDataString(k)}/tabs/{s}", "/erp/screens/AP_PurposeRequestListFrm?FromDate=2026-10-13");
+        (k, s) => $"/erp/screens/AP_PurposeRequestListFrm/{Uri.EscapeDataString(k)}/tabs/{s}", "/erp/screens/AP_PurposeRequestListFrm?FromDate=2026-10-13",
+        Page: n => $"/erp/screens/AP_PurposeRequestListFrm?FromDate=2026-10-13&page={n}",
+        Lookup: (f, p) => $"/erp/screens/AP_PurposeRequestListFrm/lookups/{f}?q={{q}}" + string.Concat(p.Select((x, i) => $"&p{i}={Uri.EscapeDataString(x)}")));
 
     public static TheoryData<string> Pages()
     {
@@ -40,6 +42,8 @@ public sealed class RendererContractTests(FrontendValidator validator) : IClassF
             MetaScreens.List(SampleScreens.List(), "Đề nghị mua hàng", "05011", MetaUrls),
             MetaScreens.Record(SampleScreens.Record("PO/001"), "Đề nghị mua hàng", "05011", MetaUrls, "__RequestVerificationToken", "t"),
             MetaScreens.Detail(SampleScreens.Detail(), "Hàng hóa đề nghị"),
+            MetaScreens.Lookup(SampleScreens.Lookup(), "Nhà cung cấp"),
+            MetaScreens.List(SampleScreens.List() with { Page = 2 }, "Đề nghị mua hàng", "05011", MetaUrls),
             MetaScreens.ConfigError("BAD_ConfigFrm", null, "Form cấu hình xấu", "Đoạn SQL 'T0.FTX' trong cấu hình form không chạy được."),
         };
     }
