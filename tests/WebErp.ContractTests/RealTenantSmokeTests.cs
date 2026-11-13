@@ -24,6 +24,58 @@ public sealed class RealTenantSmokeTests(FrontendValidator validator) : IClassFi
     /// Mô tả bảng/view thật (cột, kiểu, số dòng) và dòng SY_FrmCfg của các form, để soạn tệp mô tả form viết tay.
     /// Biến <c>WEBERP_REAL_DESCRIBE</c>: danh sách tên bảng/view hoặc <c>form:TênForm</c>, cách nhau dấu phẩy. Chỉ đọc catalog.
     /// </summary>
+    /// <summary>
+    /// CHỈ MÁY DEV. Biến <c>WEBERP_REAL_SQLFILE</c>: tệp các câu SELECT, mỗi câu mở đầu bằng dòng <c>-- tên</c>. Mỗi câu qua
+    /// <c>SqlTemplate.EnsureReadOnly</c> và chạy trong giao dịch LUÔN rollback; ghi tối đa 300 dòng / câu vào <c>sql.txt</c>.
+    /// Dùng để kiểm cấu trúc DB thật trước khi thiết kế phần ghi (M4). Không đưa kết quả vào repo.
+    /// </summary>
+    [Fact]
+    public async Task Run_read_only_checks()
+    {
+        var root = Environment.GetEnvironmentVariable("WEBERP_REAL_ROOT");
+        var file = Environment.GetEnvironmentVariable("WEBERP_REAL_SQLFILE");
+        Assert.SkipWhen(string.IsNullOrEmpty(root) || string.IsNullOrEmpty(file), "Chỉ chạy trên máy dev (WEBERP_REAL_ROOT, WEBERP_REAL_SQLFILE).");
+        var outDir = Environment.GetEnvironmentVariable("WEBERP_REAL_OUT") ?? Path.GetTempPath();
+        var paths = new WebErpPaths(root!);
+        var services = new ServiceCollection();
+        services.AddWebErpDataProtection(paths, null);
+        using var sp = services.BuildServiceProvider();
+        var store = new SqliteTenantStore(new ConfigDatabase(paths), new SecretProtector(sp.GetRequiredService<IDataProtectionProvider>()), TimeProvider.System);
+        var tenant = (await store.GetAsync(Environment.GetEnvironmentVariable("WEBERP_REAL_TENANT")!, CancellationToken.None))!;
+        await using var c = await new ErpConnectionFactory(store, new ErpOptions()).OpenAsync(tenant, CancellationToken.None);
+        var lines = new List<string>();
+        var blocks = System.Text.RegularExpressions.Regex.Split(await File.ReadAllTextAsync(file!), @"^--\s*", System.Text.RegularExpressions.RegexOptions.Multiline)
+            .Where(b => b.Trim().Length > 0);
+        foreach (var block in blocks)
+        {
+            var nl = block.IndexOf('\n');
+            var name = (nl < 0 ? block : block[..nl]).Trim();
+            var sql = nl < 0 ? "" : block[(nl + 1)..].Trim().TrimEnd(';');
+            lines.Add($"== {name}");
+            try
+            {
+                WebErp.Erp.Query.SqlTemplate.EnsureReadOnly(sql, name);
+                await using var tx = (Microsoft.Data.SqlClient.SqlTransaction)await c.BeginTransactionAsync();
+                try
+                {
+                    await using var r = await c.ExecuteReaderAsync(new CommandDefinition(sql, transaction: tx, commandTimeout: 120));
+                    var cols = Enumerable.Range(0, r.FieldCount).Select(r.GetName).ToArray();
+                    lines.Add("   " + string.Join(" | ", cols));
+                    var n = 0;
+                    while (await r.ReadAsync() && n++ < 300)
+                    {
+                        lines.Add("   " + string.Join(" | ", Enumerable.Range(0, r.FieldCount).Select(i => r.IsDBNull(i) ? "NULL"
+                            : (r.GetValue(i) is byte[] b ? $"0x{Convert.ToHexString(b.Take(16).ToArray())}" : Convert.ToString(r.GetValue(i), System.Globalization.CultureInfo.InvariantCulture)!)
+                                .ReplaceLineEndings(" ") is var s && s.Length > 300 ? s[..300] + "…" : s)));
+                    }
+                }
+                finally { await tx.RollbackAsync(); }
+            }
+            catch (Exception ex) { lines.Add("   LỖI: " + ex.Message); }
+        }
+        await File.WriteAllLinesAsync(Path.Combine(outDir, "sql.txt"), lines);
+    }
+
     [Fact]
     public async Task Describe_real_tables_for_overlays()
     {

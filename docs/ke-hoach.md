@@ -19,7 +19,7 @@
 | **M1** | Vỏ chạy được: cấu hình SQLite + CLI quản trị, nhận diện công ty theo domain, đăng nhập tài khoản ERP, cookie, `session`, `menu`, `home`, màn chưa hỗ trợ, `/health`, contract test, CD qua runner trên VPS | Không | Xong 2026-11-12; chạy trên VPS từ 2026-11-12 (erp / quantri.finora.io.vn) |
 | M2 | Màn danh sách chỉ đọc: biên dịch metadata `SY_FrmLstTbl` / `SY_FrmCfg` (GD2, HDE, LYT), lọc, lưới, tra cứu F4. Pilot `AP_PurposeRequestListFrm` (`CS_ReceiptFrm` là form viết tay, không có metadata) | Không | Phần chính xong 2026-11-12 (123/127 form metadata của Medcom); tên thay mã, F4, phân trang xong 2026-11-13; còn ô lọc kiểu khác |
 | M3 | Xem chứng từ (`EDIT` `data-mode="view"`), tab chi tiết nạp lười, quyền form (`GetPermission`), ẩn cột tiền | Không | Phần chính xong 2026-11-12; 16 form chứng từ viết tay (2026-11-12) và 30 form viết tay còn lại (2026-11-13) xem được; còn in (M6) |
-| M4 | Ghi: migration schema `web`, `SavePipeline` (journal `__idem`, `isLock`, khóa sổ, `DateUpdate` → 409, số chứng từ, `UserAutoID`, XML hook, `Msg/MsgType`), `SY_UserLog`, mã công ty trong form | **Có** | Chưa; cần CQ-01 |
+| M4 | Ghi: migration schema `web`, `SavePipeline` (journal `__idem`, `isLock`, khóa sổ, `DateUpdate` → 409, số chứng từ, `UserAutoID`, XML hook, `Msg/MsgType`), `SY_UserLog`, mã công ty trong form | **Có** | Đang làm: CQ-01 chốt 2026-11-13 (bản sao MedData trên z4); P0 nền xong 2026-11-13 |
 | M5 | Trang quản trị trên web (TOTP), chế độ bảo trì, đăng xuất cả công ty từ web, hằng mật khẩu ERP đặt trên web | Không | Xong phần chính 2026-11-12; còn thu hồi phiên theo từng user (cần schema `web`, M4) |
 | M6 | Báo cáo (`*ReportStp`), xuất Excel, đính kèm có kiểm quyền | Không | Chưa |
 
@@ -177,3 +177,19 @@ Xem [deploy/README.md](../deploy/README.md). Tóm tắt:
 - Phân trang: danh sách 1.000 dòng/trang, `OFFSET … FETCH` với thứ tự SO + khóa chính (trang không trùng/sót dòng);
   `nav[data-erp=pager]` sau lưới, link giữ bộ lọc đang áp. Slot có `TRS` không phân trang (WinForms chỉ lấy top N).
 - Chạy thử trên bản sao MedData: 145 màn, 59 chứng từ: 249 ô tra cứu (87 có tên kèm), 438 lần F4 đều trả đúng; validator 0 lỗi.
+
+## M4 — ghi dữ liệu: nền P0 (2026-11-13)
+
+- Đặc tả lưu / xóa của WinForms (trình tự, khóa, số chứng từ, `UserAutoID`, audit, hook, nhật ký, khác biệt form viết tay) đã
+  lập từ mã dịch ngược + kiểm DB thật (RCSI bật, giờ server UTC+7, 172 FK cascade, 50 trigger, mặt nạ `{P}{MM}{YY}/{4}`).
+  Thứ tự làm: P0 nền → P1 danh mục LIST → P2 LISTEDIT → P3 chứng từ EDIT → P4 form viết tay; form dùng tính năng chưa hỗ
+  trợ thì khóa ghi, không ghi "gần đúng".
+- Quyết định (QĐ-09): hook kiểm tra (EBS/EBE/EBD) lỗi SQL thì cho lưu tiếp như WinForms, ghi cảnh báo log.
+- P0 đã có:
+  - schema `web` theo migration đánh số nhúng trong dll (`src/WebErp.Erp/WebSchema/Migrations/NNNN_tên.sql`), chạy bằng
+    `WebErp.Admin tenant migrate <mã> [--status]`, không tự chạy khi BE khởi động; mỗi migration một giao dịch + `sp_getapplock`;
+    đổi nội dung migration đã chạy ⇒ báo lỗi. `0001_web_core`: `web.MigrationHistory`, `web.CommandJournal` (chống gửi trùng
+    `__idem`), `web.PostCommitTask`. Đã chạy trên bản sao MedData (z4) 2026-11-13;
+  - `ErpIds`: `UserAutoID` 25 chữ số và `UID` cơ số 35 đúng thuật toán WinForms; `VietnameseText.StripAccents`: bảng 140 cặp
+    của `ConvertUnicode_Khongdau`.
+- Công cụ máy dev: `RealTenantSmokeTests.Run_read_only_checks` (`WEBERP_REAL_SQLFILE`: câu SELECT, kiểm chỉ đọc, giao dịch rollback).

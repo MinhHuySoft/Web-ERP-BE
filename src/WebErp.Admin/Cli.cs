@@ -29,6 +29,7 @@ public static class Cli
           tenant maintenance <mã> <số phút | off>    bật / tắt chế độ bảo trì (BE trả 503)
           tenant logout-all <mã>                     đăng xuất mọi người của công ty
           tenant test <mã>                           thử kết nối DB công ty (chỉ đọc thông tin hệ thống)
+          tenant migrate <mã> [--status]             tạo / nâng cấp schema web trong DB công ty (QĐ-02); --status chỉ xem
           admin list                                 liệt kê tài khoản quản trị trang web
           admin remove <tên>                         xóa tài khoản quản trị (mất điện thoại TOTP: xóa rồi
                                                      tạo lại ở http://127.0.0.1:8082/ trên chính VPS)
@@ -154,6 +155,23 @@ public static class Cli
                                   + (stored.TrustServerCertificate ? " (chưa kiểm chứng chỉ của máy chủ SQL)" : ""));
                 Console.WriteLine($"SY_User: {(r.HasUserTable ? "có" : "KHÔNG")}; {tenant.ModuleId}_GetUserMenuFnc: {(r.HasMenuFunction ? "có" : "KHÔNG")}");
                 return r.HasUserTable && r.HasMenuFunction ? 0 : 3;
+            case "tenant migrate":
+                Need(key);
+                var mt = await env.Store.GetAsync(key!, CancellationToken.None) ?? throw new InvalidOperationException($"Không có công ty '{key}'.");
+                var migrator = new WebErp.Erp.WebSchema.WebSchemaMigrator(new ErpConnectionFactory(env.Store, new ErpOptions()));
+                if (a.Has("status"))
+                {
+                    var st = await migrator.StatusAsync(mt, CancellationToken.None);
+                    foreach (var m in st.All)
+                    {
+                        var ap = st.Applied.FirstOrDefault(x => x.Id == m.Id);
+                        Console.WriteLine($"{m.Id:0000} {m.Name,-30} {(ap is null ? "CHƯA CHẠY" : ap.Checksum != m.Checksum ? "ĐÃ CHẠY, TỆP ĐÃ ĐỔI" : $"đã chạy {ap.AppliedAt:yyyy-MM-dd HH:mm}")}");
+                    }
+                    return st.UpToDate ? 0 : 4;
+                }
+                var ran = await migrator.ApplyAsync(mt, Actor(), CancellationToken.None);
+                Console.WriteLine(ran.Count == 0 ? "Schema web đã ở bản mới nhất." : "Đã chạy: " + string.Join(", ", ran.Select(m => $"{m.Id:0000} {m.Name}")));
+                return 0;
             default:
                 Console.Error.WriteLine("Lệnh không hợp lệ.\n");
                 Console.WriteLine(Usage);
