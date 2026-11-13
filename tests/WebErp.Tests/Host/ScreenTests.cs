@@ -52,6 +52,19 @@ public sealed class ScreenTests(HostFixture f)
     }
 
     [Fact]
+    public async Task Config_error_page_is_logged_without_data_values()
+    {
+        using var c = f.Client();
+        Assert.Equal(HttpStatusCode.SeeOther, (await HostFixture.LoginAsync(c, "admin", "123")).StatusCode);
+        Assert.Contains("chưa mở được trên bản web", await Get(c, "/erp/screens/NguoiDungFrm"));
+        var log = Assert.Single(f.Logs.Entries, e => e.Category == "WebErp.Screens" && e.Message.Contains("NguoiDungFrm", StringComparison.Ordinal));
+        Assert.Equal(Microsoft.Extensions.Logging.LogLevel.Warning, log.Level);
+        Assert.Contains("(SQL 245)", log.Message);
+        Assert.Contains("MC", log.Message);
+        Assert.DoesNotContain("GIA-TRI-RIENG", log.Message);
+    }
+
+    [Fact]
     public async Task Form_without_web_support_shows_not_available_and_unknown_screen_is_forbidden()
     {
         using var c = f.Client();

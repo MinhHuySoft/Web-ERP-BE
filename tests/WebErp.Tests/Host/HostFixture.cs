@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using WebErp.Config;
 using WebErp.Core.Auth;
 using WebErp.Core.Errors;
@@ -43,7 +44,14 @@ public sealed class FakeErp : IErpUsers, IErpMenu, IErpScreens
     public Task<ListView> OpenListAsync(ScreenRequest request, CancellationToken ct)
     {
         LastScreen = request;
-        return Task.FromResult(request.FormName == "AP_PurposeRequestListFrm" ? SampleScreens.List() : new ListView(ScreenStatus.NotSupported));
+        return Task.FromResult(request.FormName switch
+        {
+            "AP_PurposeRequestListFrm" => SampleScreens.List(),
+            // Lỗi SQL có giá trị dữ liệu trong thông điệp: log không được chép thông điệp này.
+            "NguoiDungFrm" => new ListView(ScreenStatus.ConfigError,
+                Note: "Câu truy vấn dựng từ cấu hình form bị lỗi (SQL 245): Conversion failed when converting the varchar value 'GIA-TRI-RIENG' to data type int."),
+            _ => new ListView(ScreenStatus.NotSupported),
+        });
     }
 
     public Task<RecordView> OpenRecordAsync(ScreenRequest request, string key, CancellationToken ct) =>
@@ -71,6 +79,7 @@ public sealed class HostFixture : IDisposable
     public string Root { get; } = Path.Combine(Path.GetTempPath(), "weberp-host-" + Guid.NewGuid().ToString("N"));
     public FakeErp Erp { get; } = new();
     public TestClock Clock { get; } = new(DateTimeOffset.UtcNow);
+    public CapturedLogs Logs { get; } = new();
     public WebApplicationFactory<Program> Factory { get; }
     public ConfigWriter Writer { get; }
 
@@ -82,6 +91,7 @@ public sealed class HostFixture : IDisposable
         Factory = new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
         {
             b.UseEnvironment("Development");
+            b.ConfigureLogging(l => l.AddProvider(Logs));
             b.ConfigureServices(s =>
             {
                 s.RemoveAll<IErpUsers>();
