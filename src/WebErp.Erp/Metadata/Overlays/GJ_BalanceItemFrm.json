@@ -1,7 +1,7 @@
 // Số dư hàng tồn kho. Nguồn: ERP/GJ_BalanceItemFrm.cs:219-260 (viết cứng :238, IsBalance = 1 luôn áp).
 // Form đọc SY_FrmCfg (LoadLayout, T0 thắng nếu đủ TN+PK) nên cấu hình DB đứng trước.
 // WinForms không lọc người tạo ở form số dư (SPA2).
-// Lọc chi nhánh: WinForms không lọc ở form này; web vẫn lọc theo chi nhánh của người dùng (chờ chủ dự án chốt SPA3).
+// Không lọc chi nhánh, như WinForms (form viết tay không gọi GetBranchFilter).
 {
   "form": "GJ_BalanceItemFrm",
   "formType": "LIST",

@@ -1,5 +1,5 @@
 // Danh mục nhóm người dùng. Nguồn: Tools.SysForm/NguoiDungNhomFrm.cs:646-689 (SetData 652-653).
-// Không đọc SY_FrmCfg. Lọc chi nhánh như WinForms (FTW): user không có chi nhánh thấy mọi nhóm.
+// Không đọc SY_FrmCfg. Lọc chi nhánh riêng của form (FTW): user không có chi nhánh thấy mọi nhóm.
 // Web không chạy CREATE INDEX / {Mod}_Update_Permission như lúc mở form WinForms.
 {
   "form": "NguoiDungNhomFrm",
@@ -8,7 +8,6 @@
   "useDbConfig": false,
   "cfg": {
     "SPA2": "1",
-    "SPA3": "1",
     "WACT": "Thêm;Sửa;Xóa",
     "T0": {
       "TN": "SY_UserGroup",

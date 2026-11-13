@@ -1,6 +1,6 @@
 // Danh mục tài sản. Nguồn: ERP/FA_AssetListFrm.cs:1921-2143. Form đọc SY_FrmCfg (T0, T4–T6, LYT, T1V…) nên DB đứng trước.
 // WinForms bỏ qua SPA2 và luôn lọc người tạo với user thường (FTW). Tệp đính kèm: chỉ siêu dữ liệu.
-// Lọc chi nhánh: WinForms không lọc ở form này; web vẫn lọc theo chi nhánh của người dùng (chờ chủ dự án chốt SPA3).
+// Không lọc chi nhánh, như WinForms (form viết tay không gọi GetBranchFilter).
 {
   "form": "FA_AssetListFrm",
   "formType": "EDIT",

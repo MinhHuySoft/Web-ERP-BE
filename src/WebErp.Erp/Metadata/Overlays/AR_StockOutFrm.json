@@ -1,5 +1,6 @@
 // Theo dõi phiếu xuất kho. Nguồn: mã dịch ngược ERP/AR_StockOutFrm.cs:1300-1326; cột kiểm trên MedData 2026-11-12.
 // Form luôn viết cứng (không đọc SY_FrmCfg): chỉ dùng tệp này.
+// Form tự lọc chi nhánh của người dùng (ô chi nhánh khóa khi người dùng có chi nhánh, ERP/AR_StockOutFrm.cs) → WBR.
 {
   "form": "AR_StockOutFrm",
   "formType": "EDIT",
@@ -8,6 +9,7 @@
   "cfg": {
     "SP": "9",
     "DFP": "DocumentDate",
+    "WBR": "1",
     "T0": {
       "TN": "vIS_Output",
       "PK": "DocumentID",

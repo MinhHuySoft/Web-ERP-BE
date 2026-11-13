@@ -8,7 +8,6 @@
   "useDbConfig": true,
   "cfg": {
     "SPA2": "1",
-    "SPA3": "1",
     "WACT": "Thêm;Sửa;Xóa;Reset / Xóa / Đặt lại mật mã;Phân quyền;Chuyển dữ liệu người dùng",
     "T0": {
       "TN": "SY_User",

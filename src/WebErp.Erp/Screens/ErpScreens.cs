@@ -70,7 +70,7 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
             var q = new SlotQuery(slot, ctx.Resolve);
             var filters = new List<ViewFilter>();
             DateFilter(ctx, form, q, src, filters);
-            await ToolbarFiltersAsync(ctx, form, q, c, tx, filters, ct);
+            await ToolbarFiltersAsync(ctx, form, q, src, c, tx, filters, ct);
             await ImplicitFiltersAsync(ctx, form, q, src, c, tx, includeToolbarFilter: true, ct);
             Search(ctx, q, src, filters);
 
@@ -272,7 +272,8 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
     }
 
     /// <summary>Ô lọc của <c>SY_FrmFltTbl</c>: text, ngày, số, combo, checkbox (các kiểu khác chưa hỗ trợ, bỏ qua).</summary>
-    private static async Task ToolbarFiltersAsync(Ctx ctx, FormMeta form, SlotQuery q, SqlConnection c, SqlTransaction tx, List<ViewFilter> filters, CancellationToken ct)
+    private static async Task ToolbarFiltersAsync(Ctx ctx, FormMeta form, SlotQuery q, IReadOnlySet<string> src, SqlConnection c, SqlTransaction tx,
+        List<ViewFilter> filters, CancellationToken ct)
     {
         foreach (var f in form.Filters)
         {
@@ -300,14 +301,68 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
             if (param is null) continue;
             if (f.WhereString is not null)
             {
-                q.Where.Add(q.Fragment(f.WhereString, $"lọc {name}", t => t == "0" || t.Equals(f.Column, StringComparison.OrdinalIgnoreCase) ? (true, param) : (false, null)));
+                // Slot có join (vd tên đối tượng từ CF_ObjectTbl): cột trần của bảng nguồn trong mẫu lọc ghi kèm tên bảng.
+                var where = q.Slot.Joins.Count > 0 && q.Slot.FromOverride is null ? QualifyColumns(f.WhereString, q.Slot.Source, src) : f.WhereString;
+                q.Where.Add(q.Fragment(where, $"lọc {name}", t => t == "0" || t.Equals(f.Column, StringComparison.OrdinalIgnoreCase) ? (true, param) : (false, null)));
                 continue;
             }
             SqlTemplate.EnsureReadOnly(f.Column, $"lọc {name}");
-            var column = f.Type == 1 ? $"CAST({f.Column} AS date)" : f.Column;
+            // Cột của bảng nguồn thì ghi kèm tên bảng: slot có join tới bảng cùng tên cột (vd BranchID) không bị "Ambiguous column name".
+            var target = src.Contains(f.Column) && q.Slot.FromOverride is null ? q.Col(f.Column) : f.Column;
+            var column = f.Type == 1 ? $"CAST({target} AS date)" : target;
             var op = f.Type == 5 ? "=" : f.Operator switch { 1 => "LIKE", 2 => ">", 3 => ">=", 4 => "<", 5 => "<=", 6 => "<>", _ => "=" };
             q.Where.Add($"{column} {op} {q.Param(param)}");
         }
+    }
+
+    /// <summary>
+    /// Ghi kèm tên bảng nguồn cho cột "trần" của bảng nguồn trong một đoạn SQL lọc (vd <c>BranchID = '{BranchID}'</c> →
+    /// <c>Bảng.[BranchID] = …</c>), để slot có join tới bảng cùng tên cột không lỗi "Ambiguous column name". Bỏ qua chuỗi, token
+    /// <c>{…}</c>, tên đã có tiền tố / hậu tố <c>.</c>, tên hàm (theo sau là <c>(</c>), kiểu sau <c>AS</c>, tên trong <c>[…]</c>.
+    /// </summary>
+    internal static string QualifyColumns(string sql, string source, IReadOnlySet<string> columns)
+    {
+        var sb = new System.Text.StringBuilder(sql.Length + 32);
+        var i = 0;
+        var lastWord = "";
+        while (i < sql.Length)
+        {
+            var ch = sql[i];
+            if (ch == '\'')
+            {
+                var j = i + 1;
+                while (j < sql.Length && !(sql[j] == '\'' && (j + 1 >= sql.Length || sql[j + 1] != '\''))) j += sql[j] == '\'' ? 2 : 1;
+                j = Math.Min(j + 1, sql.Length);
+                sb.Append(sql, i, j - i);
+                i = j;
+                continue;
+            }
+            if (ch is '[' or '{')
+            {
+                var end = sql.IndexOf(ch == '[' ? ']' : '}', i);
+                end = end < 0 ? sql.Length - 1 : end;
+                sb.Append(sql, i, end - i + 1);
+                i = end + 1;
+                continue;
+            }
+            if (char.IsLetter(ch) || ch == '_')
+            {
+                var j = i;
+                while (j < sql.Length && (char.IsLetterOrDigit(sql[j]) || sql[j] is '_' or '#' or '$')) j++;
+                var word = sql[i..j];
+                var k = j;
+                while (k < sql.Length && char.IsWhiteSpace(sql[k])) k++;
+                var bare = (i == 0 || sql[i - 1] is not ('.' or '@')) && (j >= sql.Length || sql[j] != '.') && (k >= sql.Length || sql[k] != '(')
+                    && !lastWord.Equals("as", StringComparison.OrdinalIgnoreCase);
+                sb.Append(bare && columns.Contains(word) ? $"{source}.[{word}]" : word);
+                lastWord = word;
+                i = j;
+                continue;
+            }
+            sb.Append(ch);
+            i++;
+        }
+        return sb.ToString();
     }
 
     /// <summary>Danh sách chọn của combo lọc: chạy câu nguồn (đã kiểm chỉ đọc), lấy tối đa <see cref="OptionsMax"/> dòng.</summary>
@@ -330,6 +385,15 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
         return options;
     }
 
+    /// <summary>
+    /// Lọc theo chi nhánh của người dùng như WinForms: chỉ form ĐỘNG tự lọc (<c>FrmFormList</c>, <c>FrmFormListEdit</c>,
+    /// <c>FrmMasterDetail</c> gọi <c>Connector.GetBranchFilter</c>), trừ khi SPA3 = 1. Form viết tay không gọi hàm này (chủ dự án chốt
+    /// 2026-11-13: giống ERP), nên chỉ lọc khi tệp mô tả đặt key web <c>WBR</c> = 1 cho form tự lọc chi nhánh trong mã
+    /// (vd theo dõi phiếu nhập/xuất kho, phân bổ / khấu hao theo kỳ có ô chi nhánh khóa theo người dùng).
+    /// </summary>
+    internal static bool BranchFiltered(FormMeta form) =>
+        HandCodedForms.Names.Contains(form.FormName) ? form.Setting("WBR") == "1" : form.Setting("SPA3") != "1";
+
     /// <summary>Lọc ngầm (tài liệu 10 §3.6): quyền chỉ Thêm, chứng từ của chính mình, chi nhánh, FTR, FTX (FTXS).</summary>
     private static async Task ImplicitFiltersAsync(Ctx ctx, FormMeta form, SlotQuery q, IReadOnlySet<string> src, SqlConnection c, SqlTransaction tx,
         bool includeToolbarFilter, CancellationToken ct)
@@ -339,7 +403,7 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
         if (src.Contains("UserCreate") && !ctx.Perm.SeesAll && form.Setting("SPA2") != "1")
             q.Where.Add($"{q.Col("UserCreate")} = {q.Param(ctx.Req.UserName)}");
         var branches = (ctx.Req.BranchId ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (src.Contains("BranchID") && branches.Length > 0 && form.Setting("SPA3") != "1")
+        if (src.Contains("BranchID") && branches.Length > 0 && BranchFiltered(form))
             q.Where.Add($"{q.Col("BranchID")} IN ({string.Join(", ", branches.Select(b => q.Param(b)))}) OR {q.Col("BranchID")} IS NULL");
         if (slot.FilterWeb is not null) q.Where.Add(q.Fragment(slot.FilterWeb, $"{slot.Id}.FTW"));
         if (includeToolbarFilter && slot.Filter is not null) q.Where.Add(q.Fragment(slot.Filter, $"{slot.Id}.FTR"));

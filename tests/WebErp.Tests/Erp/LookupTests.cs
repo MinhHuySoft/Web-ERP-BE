@@ -79,6 +79,14 @@ public sealed class LookupTests
     }
 
     [Theory]
+    [InlineData("( BranchID = '{BranchID}' or BranchID2 = '{BranchID}' )", "( T.[BranchID] = '{BranchID}' or T.[BranchID2] = '{BranchID}' )")]
+    [InlineData("A.BranchID = {BranchID} AND COALESCE(ImpExpID,'') <> 'XG'", "A.BranchID = {BranchID} AND COALESCE(T.[ImpExpID],'') <> 'XG'")]
+    [InlineData("CAST(DocumentDate AS date) = {0} and [BranchID] = 'BranchID'", "CAST(T.[DocumentDate] AS date) = {0} and [BranchID] = 'BranchID'")]
+    [InlineData("Status IN (1, 2) OR Memo LIKE N'%Status%'", "T.[Status] IN (1, 2) OR T.[Memo] LIKE N'%Status%'")]
+    public void Bare_source_columns_in_filter_templates_get_the_table_name(string sql, string expected) =>
+        Assert.Equal(expected, ErpScreens.QualifyColumns(sql, "T", new HashSet<string>(["BranchID", "BranchID2", "ImpExpID", "DocumentDate", "Status", "Memo", "date"], StringComparer.OrdinalIgnoreCase)));
+
+    [Theory]
     [InlineData("Password", true)]
     [InlineData("PassWord", true)]
     [InlineData("Pass", true)]

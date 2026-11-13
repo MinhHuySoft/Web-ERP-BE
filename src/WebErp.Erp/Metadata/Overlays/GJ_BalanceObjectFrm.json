@@ -1,7 +1,7 @@
 // Số dư công nợ đối tượng. Nguồn: ERP/GJ_BalanceObjectFrm.cs:308-351 (viết cứng :327; IsBalance = 1 luôn áp). Đọc SY_FrmCfg.
 // Cột Nợ/Có (SourceDebit…) do form tự ALTER thêm và chỉ đồng bộ khi bật chế độ Nợ/Có nên ẩn sẵn.
 // WinForms không lọc người tạo ở form số dư (SPA2).
-// Lọc chi nhánh: WinForms không lọc ở form này; web vẫn lọc theo chi nhánh của người dùng (chờ chủ dự án chốt SPA3).
+// Không lọc chi nhánh, như WinForms (form viết tay không gọi GetBranchFilter).
 {
   "form": "GJ_BalanceObjectFrm",
   "formType": "LIST",

@@ -1,4 +1,6 @@
+using WebErp.Core.Metadata;
 using WebErp.Erp.Metadata;
+using WebErp.Erp.Screens;
 
 namespace WebErp.Tests.Erp;
 
@@ -47,6 +49,19 @@ public sealed class FormOverlaysTests
 
         var lockDoc = FormOverlays.Get("SY_LockDocumentFrm", null)!.Value;
         Assert.StartsWith("(SELECT SourceID", MetadataCompiler.Compile("L", "L", lockDoc.Lst, lockDoc.Rows, []).Slots["T1"].FromOverride);
+    }
+
+    [Fact]
+    public void Branch_filter_follows_winforms_dynamic_forms_only()
+    {
+        static FormMeta F(string name, params FrmCfgRow[] rows) =>
+            MetadataCompiler.Compile(name, name, new FrmLstRow(name, "EDIT", name, "T", "ID", null, null, null, null, null), rows, []);
+        Assert.True(ErpScreens.BranchFiltered(F("AP_PurposeRequestListFrm")));                                  // form động: GetBranchFilter
+        Assert.False(ErpScreens.BranchFiltered(F("AP_PurposeRequestListFrm", new FrmCfgRow("SPA3", "", "1", null))));
+        Assert.False(ErpScreens.BranchFiltered(F("CS_ReceiptFrm")));                                            // form viết tay: không lọc
+        Assert.False(ErpScreens.BranchFiltered(F("CS_ReceiptFrm", new FrmCfgRow("SPA3", "", "0", null))));     // SPA3 của DB không áp
+        var stock = FormOverlays.Get("AR_StockOutFrm", null)!.Value;                                             // form tự lọc trong mã: WBR
+        Assert.True(ErpScreens.BranchFiltered(MetadataCompiler.Compile("AR_StockOutFrm", "AR_StockOutFrm", stock.Lst, stock.Rows, [])));
     }
 
     [Fact]

@@ -7,7 +7,6 @@
   "useDbConfig": false,
   "cfg": {
     "SPA2": "1",
-    "SPA3": "1",
     "WACT": "Sửa / Phân quyền;Cập nhập quyền;Thêm sửa nhóm;Copy quyền từ nhóm khác",
     "T0": {
       "TN": "SY_UserGroup",
