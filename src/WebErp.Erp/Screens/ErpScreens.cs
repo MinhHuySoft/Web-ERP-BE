@@ -54,13 +54,16 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
             await ImplicitFiltersAsync(ctx, form, q, src, c, tx, includeToolbarFilter: true, ct);
             Search(ctx, q, src, filters);
 
+            // Phân trang (chuẩn 11.5): mỗi trang ListMax dòng. Slot có TRS thì như WinForms chỉ lấy top N, không phân trang.
+            var paged = slot.Top is null;
             var take = Math.Min(ListMax, slot.Top ?? ListMax);
-            var data = await SqlReader.ReadAsync(c, tx, q.ListSql(take), q.Parameters, ctx.Timeout, take, ct);
+            var page = paged && int.TryParse(req.Query.GetValueOrDefault("page"), NumberStyles.None, CultureInfo.InvariantCulture, out var pg) ? Math.Clamp(pg, 1, 100_000) : 1;
+            var data = await SqlReader.ReadAsync(c, tx, paged ? q.PageSql((page - 1) * take, take) : q.ListSql(take), q.Parameters, ctx.Timeout, take, ct);
             var cols = Columns(ctx, slot, "F0", data.Names, data.Types);
             var sumCols = cols.Where(x => x.Col.Sum && src.Contains(x.Col.Field)).Select(x => x.Col.Field).ToList();
-            var total = data.Rows.Count;
+            var total = (page - 1) * take + data.Rows.Count;
             var sums = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
-            if (data.Rows.Count >= take || sumCols.Count > 0)
+            if (data.Rows.Count >= take || page > 1 || sumCols.Count > 0)
             {
                 var countSql = q.CountSql(slot.Distinct ? [] : sumCols);
                 await using var r = await c.ExecuteReaderAsync(new CommandDefinition(countSql, q.Parameters, tx, ctx.Timeout, cancellationToken: ct));
@@ -71,13 +74,21 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
                         sums[sumCols[i]] = r.IsDBNull(i + 1) ? 0 : Convert.ToDecimal(r.GetValue(i + 1), CultureInfo.InvariantCulture);
                 }
             }
+            // Trang vượt quá (bộ lọc vừa đổi, số dòng ít đi): về trang cuối.
+            if (page > 1 && data.Rows.Count == 0 && total > 0)
+            {
+                page = (total + take - 1) / take;
+                data = await SqlReader.ReadAsync(c, tx, q.PageSql((page - 1) * take, take), q.Parameters, ctx.Timeout, take, ct);
+            }
             foreach (var x in cols.Where(x => x.Col.Sum && !sums.ContainsKey(x.Col.Field))) sums[x.Col.Field] = SumRows(data.Rows, x.Index);
+            cols = await WithNamesAsync(ctx, slot, cols, data.Rows, null, c, tx, ct);
 
             var keyIndex = Array.FindIndex(data.Names, n => n.Equals(slot.PrimaryKey, StringComparison.OrdinalIgnoreCase));
             return new ListView(ScreenStatus.Ok, form, cols.Select(x => x.Col).ToList(),
                 data.Rows.Select(row => cols.Select(x => row[x.Index]).ToArray()).ToList(),
                 data.Rows.Select(row => keyIndex < 0 ? "" : Invariant(row[keyIndex])).ToList(),
-                total, sums, filters, keyIndex >= 0 ? slot.PrimaryKey : null, form.IsEdit && keyIndex >= 0);
+                total, sums, filters, keyIndex >= 0 ? slot.PrimaryKey : null, form.IsEdit && keyIndex >= 0,
+                Page: page, PageSize: paged ? take : 0);
         }, e => new ListView(ScreenStatus.ConfigError, form, Note: e), ct);
     }
 
@@ -93,7 +104,7 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
         {
             var master = await MasterRowAsync(ctx, form, slot, src, key, c, tx, ct);
             if (master is null) return new RecordView(ScreenStatus.NotFound, form, key);
-            var tabs = RecordTabs(ctx, form, slot, master);
+            var tabs = await RecordTabsAsync(ctx, form, slot, master, c, tx, ct);
             var visible = new List<SlotMeta>();
             foreach (var d in form.Details.Where(d => DetailVisible(ctx, form, d)))
             {
@@ -131,6 +142,7 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
             if (detail.FilterEx is not null) q.Where.Add(q.Fragment(detail.FilterEx, $"{detail.Id}.FTX"));
             var data = await SqlReader.ReadAsync(c, tx, q.ListSql(Math.Min(DetailMax, detail.Top ?? DetailMax)), q.Parameters, ctx.Timeout, DetailMax, ct);
             var cols = Columns(ctx, detail, FormatKey(detail.Id), data.Names, data.Types);
+            cols = await WithNamesAsync(ctx, detail, cols, data.Rows, MasterValue(master), c, tx, ct);
             var keyIndex = Array.FindIndex(data.Names, n => n.Equals(detail.PrimaryKey, StringComparison.OrdinalIgnoreCase));
             return new DetailView(ScreenStatus.Ok, detail.Id, cols.Select(x => x.Col).ToList(),
                 data.Rows.Select(row => cols.Select(x => row[x.Index]).ToArray()).ToList(),
@@ -333,9 +345,11 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
         return data.Rows.Count == 0 ? null : data;
     }
 
-    private static List<ViewTab> RecordTabs(Ctx ctx, FormMeta form, SlotMeta slot, SqlRows master)
+    private static async Task<List<ViewTab>> RecordTabsAsync(Ctx ctx, FormMeta form, SlotMeta slot, SqlRows master, SqlConnection c, SqlTransaction tx,
+        CancellationToken ct)
     {
         var row = master.Rows[0];
+        var value = MasterValue(master);
         var index = master.Names.Select((n, i) => (n, i)).ToDictionary(x => x.n, x => x.i, StringComparer.OrdinalIgnoreCase);
         var removed = Removed(ctx, slot);
         var tabs = new List<ViewTab>();
@@ -351,8 +365,11 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
                     if (l.ControlType is 22 or 23 or 24 or 26 or 30) continue; // nút, nhóm, HTML: không có ở chế độ xem
                     if (l.VisiblePermiss == 7 && !ctx.Perm.SeesAll || l.VisiblePermiss == 9 && !ctx.Perm.Admin) continue;
                     if (removed.Contains(l.Field) || !index.TryGetValue(l.Field, out var i)) continue;
-                    var caption = l.Caption ?? ctx.Form.Captions.GetValueOrDefault($"C:{l.Field}") ?? Title(ctx, "F0", l.Field);
-                    fields.Add(Field(ctx, l.Field, caption, l.ControlType, master.Types[i], row[i], l.Span, l.Rows, l.RowStart));
+                    // Caption của SY_FrmDrdwTbl đè nhãn LYT (FormControler.SetEditorArr, khi ngôn ngữ VN).
+                    var dd = form.MasterDropdown(l.Field);
+                    var caption = dd?.Caption ?? l.Caption ?? ctx.Form.Captions.GetValueOrDefault($"C:{l.Field}") ?? Title(ctx, "F0", l.Field);
+                    fields.Add(await LookupFieldAsync(ctx, slot, dd, Field(ctx, l.Field, caption, l.ControlType, master.Types[i], row[i], l.Span, l.Rows, l.RowStart),
+                        l.ControlType, value, c, tx, ct));
                 }
                 var k = Array.IndexOf(order, g.Key);
                 if (fields.Count > 0)
@@ -368,7 +385,9 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
             {
                 var n = master.Names[i];
                 if (removed.Contains(n) || hidden.Contains(n) || master.Types[i] == typeof(byte[])) continue;
-                fields.Add(Field(ctx, n, ctx.Form.Captions.GetValueOrDefault($"C:{n}") ?? Title(ctx, "F0", n), 0, master.Types[i], row[i], 10, 1, false));
+                var dd = form.MasterDropdown(n);
+                var caption = dd?.Caption ?? ctx.Form.Captions.GetValueOrDefault($"C:{n}") ?? Title(ctx, "F0", n);
+                fields.Add(await LookupFieldAsync(ctx, slot, dd, Field(ctx, n, caption, 0, master.Types[i], row[i], 10, 1, false), 0, value, c, tx, ct));
             }
             tabs.Add(new ViewTab("1", "Thông tin chung", fields));
         }
@@ -387,6 +406,23 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
         };
         return new ViewField(field, caption, control, value, span, rows, rowStart, decimals);
     }
+
+    /// <summary>
+    /// Ô có danh sách chọn / tra cứu (<c>SY_FrmDrdwTbl</c>): thành ô <c>lookup</c> (mã + chữ kèm), trừ ô ngày, có/không, chọn nhiều
+    /// (ControlType 3, DropCheck), nhãn và nhiều dòng.
+    /// </summary>
+    private static async Task<ViewField> LookupFieldAsync(Ctx ctx, SlotMeta slot, DropdownMeta? d, ViewField f, int controlType, Func<string, object?> master,
+        SqlConnection c, SqlTransaction tx, CancellationToken ct)
+    {
+        if (d is null || !d.CanLookup || controlType == 3 || f.Control is "checkbox" or "date" or "datetime" or "label" or "textarea") return f;
+        if (!d.IsValueList && LookupSource(d) is null) return f;
+        var (text, paras) = await MasterLookupAsync(ctx, slot, d, f.Value, master, c, tx, ct);
+        return f with { Control = "lookup", Text = text, LookupParas = paras, Decimals = null };
+    }
+
+    /// <summary>Giá trị một cột của dòng chứng từ (null nếu không có cột).</summary>
+    private static Func<string, object?> MasterValue(SqlRows master) =>
+        name => Array.FindIndex(master.Names, n => n.Equals(name, StringComparison.OrdinalIgnoreCase)) is var i and >= 0 ? master.Rows[0][i] : null;
 
     private static bool DetailVisible(Ctx ctx, FormMeta form, SlotMeta detail)
     {
@@ -426,7 +462,10 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
             var n = names[i];
             if (removed.Contains(n) || types[i] == typeof(byte[])) continue;
             var (kind, decimals) = Kind(ctx, n, types[i], amount.Contains(n));
-            result.Add((i, new ViewColumn(n, Title(ctx, formatKey, n), kind, decimals, hidden.Contains(n) || shown?.Contains(n) == false,
+            // SY_FrmDrdwTbl của lưới: Caption đổi tiêu đề, isInvisible ẩn cột (SetDropdownFromConfig).
+            var dd = ctx.Form.GridDropdown(slot, n);
+            result.Add((i, new ViewColumn(n, dd?.Caption ?? Title(ctx, formatKey, n), kind, decimals,
+                hidden.Contains(n) || shown?.Contains(n) == false || dd?.Invisible == true,
                 sum.Contains(n) && kind is "number" or "money" or "quantity" or "percent")));
         }
         return result;

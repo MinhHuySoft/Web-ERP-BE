@@ -4,6 +4,9 @@
     <ProjectReference Include="..\WebErp.Core\WebErp.Core.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="WebErp.Tests" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="Dapper" />
     <PackageReference Include="Microsoft.Data.SqlClient" />
   </ItemGroup>

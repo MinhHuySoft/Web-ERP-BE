@@ -62,6 +62,19 @@ internal sealed class SlotQuery(SlotMeta slot, Func<string, (bool, object?)> res
     public string ListSql(int take) =>
         $"SELECT {(Slot.Distinct ? "DISTINCT " : "")}TOP ({take}) {SelectList()} FROM {From()}{WhereSql} ORDER BY {OrderBy()}";
 
+    /// <summary>
+    /// Một trang của danh sách: thứ tự SO + khóa chính để các trang không trùng / sót dòng (bỏ khi SO đã có khóa, hoặc DISTINCT vì cột
+    /// ORDER BY phải nằm trong danh sách chọn). <paramref name="offset"/>, <paramref name="take"/> do BE tính, không từ người dùng.
+    /// </summary>
+    public string PageSql(int offset, int take)
+    {
+        var order = OrderBy();
+        if (!Slot.Distinct && Slot.Sort is not null && !Slot.Sort.Contains(Slot.PrimaryKey, StringComparison.OrdinalIgnoreCase))
+            order += ", " + Col(Slot.PrimaryKey);
+        var select = $"SELECT {(Slot.Distinct ? "DISTINCT " : "")}{SelectList()} FROM {From()}{WhereSql} ORDER BY {order}";
+        return $"{select} OFFSET {offset} ROWS FETCH NEXT {take} ROWS ONLY";
+    }
+
     /// <summary>Đếm (và cộng các cột của bảng nguồn) trên toàn bộ dữ liệu khớp lọc.</summary>
     public string CountSql(IReadOnlyList<string> sumColumns)
     {

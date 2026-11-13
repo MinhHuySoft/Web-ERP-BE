@@ -75,7 +75,21 @@ public sealed class ErpMetadata(ErpConnectionFactory connections, TimeProvider t
             var flt = (await c.QueryAsync<FrmFltRow>(Cmd(
                 "SELECT KeyID,ColumnID,Caption,Type,Source,ValueColumn,DisplayColumn,Operator,WhereString,DefaultValue,IsDisable " +
                 "FROM dbo.SY_FrmFltTbl WHERE FormID=@f ORDER BY KeyID,UserAutoID", runtimeName, ct))).ToList();
-            return MetadataCompiler.Compile(formName, runtimeName, lst, [.. cfg, .. ctr], flt);
+            // Tra cứu / danh sách chọn (SY_FrmDrdwTbl): DB cũ có thể thiếu vài cột (DisplayMember2, isInvisible) nên đọc mềm theo tên.
+            var drdw = new List<FrmDrdwRow>();
+            if (await c.ExecuteScalarAsync<int>(new CommandDefinition("SELECT CASE WHEN OBJECT_ID('dbo.SY_FrmDrdwTbl') IS NULL THEN 0 ELSE 1 END", cancellationToken: ct)) == 1)
+            {
+                var rows = await c.QueryAsync(Cmd("SELECT * FROM dbo.SY_FrmDrdwTbl WHERE FormID IN (@f, @g) AND COALESCE(IsDisable,0) = 0 " +
+                                                 "ORDER BY CASE WHEN FormID = @f THEN 0 ELSE 1 END, UserAutoID", runtimeName, ct, formName));
+                foreach (IDictionary<string, object?> raw in rows)
+                {
+                    var r = new Dictionary<string, object?>(raw, StringComparer.OrdinalIgnoreCase);
+                    string? S(string k) => r.TryGetValue(k, out var v) && v is not null and not DBNull ? v.ToString() : null;
+                    drdw.Add(new FrmDrdwRow(S("GridName"), S("ColumnID"), S("Type"), S("Source"), S("ValueColumn"), S("DisplayColumn"),
+                        S("DisplayMember2"), S("ColumnArr"), S("ParaArr"), S("Caption"), r.TryGetValue("isInvisible", out var inv) && inv is true));
+                }
+            }
+            return MetadataCompiler.Compile(formName, runtimeName, lst, [.. cfg, .. ctr], flt) with { Dropdowns = MetadataCompiler.Dropdowns(drdw) };
         });
 
     public async Task<FieldFormats> GetFormatsAsync(Tenant tenant, CancellationToken ct) =>

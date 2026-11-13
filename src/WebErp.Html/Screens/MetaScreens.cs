@@ -9,7 +9,10 @@ namespace WebErp.Html.Screens;
 /// <param name="Self">URL màn danh sách, không query string (action của form lọc).</param>
 /// <param name="Record">URL xem một chứng từ theo khóa.</param>
 /// <param name="Detail">URL tab chi tiết theo (khóa, slot).</param>
-public sealed record ScreenUrls(string Self, string? Para, Func<string, string> Record, Func<string, string, string> Detail, string Refresh);
+/// <param name="Page">URL trang n của danh sách, giữ bộ lọc đang áp (chuẩn 11.5).</param>
+/// <param name="Lookup">URL tra cứu F4 của một ô (có chỗ <c>{q}</c>) theo (tên ô, giá trị tham số); null = không có tra cứu.</param>
+public sealed record ScreenUrls(string Self, string? Para, Func<string, string> Record, Func<string, string, string> Detail, string Refresh,
+    Func<int, string>? Page = null, Func<string, IReadOnlyList<string>, string>? Lookup = null);
 
 /// <summary>Màn dựng từ metadata ERP: danh sách (M2), xem chứng từ và tab chi tiết (M3). Chỉ đọc.</summary>
 public static class MetaScreens
@@ -28,10 +31,12 @@ public static class MetaScreens
             FilterRenderer.Write(w, new FilterModel($"flt-{form.RuntimeName}", urls.Self, (v.Filters ?? []).Select(FilterField).ToList(),
                 urls.Para is null ? null : [("para", urls.Para)]));
             var rows = v.Rows ?? [];
-            if (v.Total > rows.Count)
+            var paged = v.PageSize > 0 && urls.Page is not null && v.Total > v.PageSize;
+            if (!paged && v.Total > rows.Count)
                 w.Element("p", $"Đang hiện {rows.Count.ToString("N0", Vi)} trên {v.Total.ToString("N0", Vi)} dòng. Thu hẹp bộ lọc để xem phần còn lại.").Line();
             GridRenderer.Write(w, Grid("T0", v.Columns ?? [], rows, v.Keys ?? [], v.KeyField, v.Total, v.Sums,
                 v.CanOpenRecord ? urls.Record : null));
+            if (paged) PagerRenderer.Write(w, new PagerModel(v.Page, v.PageSize, v.Total, urls.Page!));
         });
     }
 
@@ -46,7 +51,7 @@ public static class MetaScreens
             ToolbarRenderer.Write(w, [new ToolbarItem("reload", "Nạp lại", Href: urls.Record(key), Target: "self", Shortcut: "F5")]);
             // Chế độ xem: mọi ô readonly / disabled (chuẩn 9). Web chưa ghi (M4) nên action là chính URL chứng từ.
             RecordRenderer.Write(w, new RecordModel(recordId, urls.Record(key), antiforgeryField, antiforgeryToken,
-                (v.Tabs ?? []).Select(t => new FieldsetModel(t.Title, t.Fields.Select(ViewField).ToList(), t.Id)).ToList(), v.KeyField, key));
+                (v.Tabs ?? []).Select(t => new FieldsetModel(t.Title, t.Fields.Select(f => ViewField(f, urls)).ToList(), t.Id)).ToList(), v.KeyField, key));
             TabsRenderer.Write(w, (v.Details ?? []).Select(d => new TabPanelModel(d.Id, d.Title, urls.Detail(key, d.Id))).ToList());
         });
     }
@@ -54,6 +59,13 @@ public static class MetaScreens
     /// <summary>Nội dung một tab chi tiết nạp lười: chỉ có lưới.</summary>
     public static string Detail(DetailView v, string title) =>
         HtmlPage.Render(title, w => GridRenderer.Write(w, Grid(v.SlotId ?? "T1", v.Columns ?? [], v.Rows ?? [], v.Keys ?? [], v.KeyField, v.Total, v.Sums, null)));
+
+    /// <summary>Kết quả tra cứu F4 (chuẩn 10): chỉ có bảng <c>lookup-result</c>.</summary>
+    public static string Lookup(LookupView v, string title) =>
+        HtmlPage.Render(title, w => LookupResultRenderer.Write(w, new LookupResultModel(
+            (v.Columns ?? []).Select(c => new GridColumn(c.Field, c.Title, Hidden: c.Hidden)).ToList(),
+            (v.Rows ?? []).Select((r, i) => new LookupResultRow(v.Values![i], v.Texts![i],
+                (v.Columns ?? []).Select((c, ci) => Cell(c, r[ci])).ToList())).ToList(), v.Total)));
 
     /// <summary>Lỗi cấu hình form (SQL không chạy được trên web chỉ đọc): vẫn là screen để FE mở thành tab.</summary>
     public static string ConfigError(string formName, string? para, string title, string note) =>
@@ -72,7 +84,7 @@ public static class MetaScreens
             Decimals: c.Decimals, Hidden: c.Hidden, Sum: c.Sum ? "sum" : null)).ToList();
         var gridRows = rows.Select((r, ri) => new GridRow(keys.Count > ri ? keys[ri] : null, columns.Select((c, ci) =>
         {
-            var cell = Cell(c, r[ci]);
+            var cell = c.NameOf(r[ci]) is { } name ? new GridCell(name, ViewColumn.CodeKey(r[ci])) : Cell(c, r[ci]);
             return recordUrl is not null && ci == keyColumn && keys.Count > ri && keys[ri].Length > 0
                 ? cell with { Href = recordUrl(keys[ri]), LinkTarget = "tab" } : cell;
         }).ToList())).ToList();
@@ -112,11 +124,13 @@ public static class MetaScreens
         _ => new FieldModel(f.Name, f.Caption, "text", f.Value, Span: 8),
     };
 
-    private static FieldModel ViewField(ViewField f)
+    private static FieldModel ViewField(ViewField f, ScreenUrls urls)
     {
         var span = Math.Clamp(f.Span, 1, 40);
         return f.Control switch
         {
+            "lookup" when urls.Lookup is not null => new FieldModel(f.Field, f.Caption, "lookup", Text(f.Value), span, ReadOnly: true, RowStart: f.RowStart,
+                Display: f.Text, LookupSrc: urls.Lookup(f.Field, f.LookupParas ?? [])),
             "checkbox" => new FieldModel(f.Field, f.Caption, "checkbox", f.Value is true ? "true" : "false", span, ReadOnly: true, RowStart: f.RowStart),
             "date" or "datetime" => new FieldModel(f.Field, f.Caption, f.Control, f.Value is DateTime d
                 ? d.ToString(f.Control == "date" ? "yyyy-MM-dd" : "yyyy-MM-ddTHH:mm", CultureInfo.InvariantCulture) : null, span, ReadOnly: true, RowStart: f.RowStart),

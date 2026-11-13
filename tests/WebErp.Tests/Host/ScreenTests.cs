@@ -22,7 +22,12 @@ public sealed class ScreenTests(HostFixture f)
         Assert.Contains("data-form-type=\"EDIT\" data-mode=\"find\"", list);
         Assert.Contains($"href=\"{Base}/PO%2F001\" data-target=\"tab\"", list);
         Assert.Contains("data-total-rows=\"1500\"", list);
-        Assert.Contains("Đang hiện 2 trên 1.500 dòng", list);
+        // Phân trang: trang sau giữ bộ lọc đang áp; tên thay mã giữ mã làm giá trị máy.
+        Assert.Contains("data-erp=\"pager\" data-page=\"1\" data-page-size=\"1000\" data-total=\"1500\"", list);
+        Assert.Contains($"rel=\"next\" href=\"{Base}?FromDate=2026-10-01&amp;BranchID=HN&amp;page=2\" data-target=\"self\"", list);
+        Assert.DoesNotContain("Đang hiện 2 trên", list);
+        Assert.Contains("<td data-value=\"1\">Đã duyệt</td>", list);
+        Assert.Contains("<td>9</td>", list);
         Assert.Contains("<tfoot>", list);
         var req = f.Erp.LastScreen!;
         Assert.Equal(("MC", "admin", "2026-10-01", "HN"), (req.Tenant.Key, req.UserName, req.Query["FromDate"], req.Query["BranchID"]));
@@ -31,6 +36,15 @@ public sealed class ScreenTests(HostFixture f)
         Assert.Contains("data-mode=\"view\"", rec);
         Assert.Contains("data-screen-key=\"AP_PurposeRequestListFrm:PO/001\"", rec);
         Assert.Contains($"data-src=\"{Base}/PO%2F001/tabs/T1\"", rec);
+        Assert.Contains($"data-lookup-src=\"{Base}/lookups/ObjectID?q={{q}}&amp;p0=HN\"", rec);
+        Assert.Contains("<output data-erp=\"lookup-text\" for=", rec);
+
+        var lk = await Get(c, $"{Base}/lookups/ObjectID?q=c%C3%B4ng&p0=HN");
+        Assert.Contains("data-erp=\"lookup-result\" data-total=\"7\"", lk);
+        Assert.Contains("<tr data-value=\"NCC02\" data-text=\"Công ty &lt;B&gt;\">", lk);
+        Assert.Contains("data-field=\"TaxCode\" data-hidden", lk);
+        Assert.Equal(("ObjectID", "công", "HN"), (f.Erp.LastLookup!.Value.Field, f.Erp.LastLookup.Value.Text, string.Join(",", f.Erp.LastLookup.Value.Paras)));
+        await Get(c, $"{Base}/lookups/Khac?q=", HttpStatusCode.NotFound);
 
         Assert.Contains("data-grid-id=\"T1\"", await Get(c, $"{Base}/PO%2F001/tabs/T1"));
         await Get(c, $"{Base}/PO%2F999", HttpStatusCode.NotFound);

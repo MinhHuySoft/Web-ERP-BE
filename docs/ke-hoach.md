@@ -16,8 +16,8 @@
 | Mốc | Nội dung | Ghi DB ERP? | Trạng thái |
 |---|---|---|---|
 | **M0** | Repo, solution 6 project, CI build + test, quy tắc (`AGENTS.md`, `.gitignore`) | Không | Xong 2026-11-12 |
-| **M1** | Vỏ chạy được: cấu hình SQLite + CLI quản trị, nhận diện công ty theo domain, đăng nhập tài khoản ERP, cookie, `session`, `menu`, `home`, màn chưa hỗ trợ, `/health`, contract test, CD qua runner trên VPS | Không | Xong 2026-11-12 (chờ chạy thử trên VPS) |
-| M2 | Màn danh sách chỉ đọc: biên dịch metadata `SY_FrmLstTbl` / `SY_FrmCfg` (GD2, HDE, LYT), lọc, lưới, tra cứu F4. Pilot `AP_PurposeRequestListFrm` (`CS_ReceiptFrm` là form viết tay, không có metadata) | Không | Phần chính xong 2026-11-12 (123/127 form metadata của Medcom); còn F4, tên thay mã, phân trang |
+| **M1** | Vỏ chạy được: cấu hình SQLite + CLI quản trị, nhận diện công ty theo domain, đăng nhập tài khoản ERP, cookie, `session`, `menu`, `home`, màn chưa hỗ trợ, `/health`, contract test, CD qua runner trên VPS | Không | Xong 2026-11-12; chạy trên VPS từ 2026-11-12 (erp / quantri.finora.io.vn) |
+| M2 | Màn danh sách chỉ đọc: biên dịch metadata `SY_FrmLstTbl` / `SY_FrmCfg` (GD2, HDE, LYT), lọc, lưới, tra cứu F4. Pilot `AP_PurposeRequestListFrm` (`CS_ReceiptFrm` là form viết tay, không có metadata) | Không | Phần chính xong 2026-11-12 (123/127 form metadata của Medcom); tên thay mã, F4, phân trang xong 2026-11-13; còn ô lọc kiểu khác |
 | M3 | Xem chứng từ (`EDIT` `data-mode="view"`), tab chi tiết nạp lười, quyền form (`GetPermission`), ẩn cột tiền | Không | Phần chính xong 2026-11-12; còn tab Định khoản/VAT của form viết tay, in (M6) |
 | M4 | Ghi: migration schema `web`, `SavePipeline` (journal `__idem`, `isLock`, khóa sổ, `DateUpdate` → 409, số chứng từ, `UserAutoID`, XML hook, `Msg/MsgType`), `SY_UserLog`, mã công ty trong form | **Có** | Chưa; cần CQ-01 |
 | M5 | Trang quản trị trên web (TOTP), chế độ bảo trì, đăng xuất cả công ty từ web, hằng mật khẩu ERP đặt trên web | Không | Xong phần chính 2026-11-12; còn thu hồi phiên theo từng user (cần schema `web`, M4) |
@@ -104,8 +104,8 @@ Xem [deploy/README.md](../deploy/README.md). Tóm tắt:
 
 **Còn lại:**
 
-- Tra cứu F4 và hiện **tên thay mã** (trạng thái, khách hàng…) theo `SY_FrmDrdwTbl`.
-- Phân trang trên server (FE chưa hỗ trợ `pager`), lưu bố cục lưới (`web.GridLayout`, M4).
+- ~~Tra cứu F4 và hiện **tên thay mã** (trạng thái, khách hàng…) theo `SY_FrmDrdwTbl`.~~ Xong 2026-11-13, xem dưới.
+- ~~Phân trang trên server.~~ Xong 2026-11-13. Lưu bố cục lưới (`web.GridLayout`, M4).
 - Ô lọc kiểu khác (kỳ 9, quý 14, UserFilterCombo 18…), `CostCenterID` của người dùng, ủy quyền `SY_UserAuthority` (MedData không có bảng).
 - ~~Form viết tay (Phiếu thu/chi, Mua hàng…): viết riêng từng form.~~ Xong phần xem (2026-11-12) bằng tệp mô tả, xem dưới.
 
@@ -127,5 +127,24 @@ Xem [deploy/README.md](../deploy/README.md). Tóm tắt:
   
   Nguồn: mã dịch ngược (số dòng ghi ở đầu mỗi tệp) + cột thật MedData. Sửa trực tiếp tệp JSON khi cần.
 - Chạy thử trên bản sao MedData: 19 biến thể theo Para đều mở được danh sách, chứng từ và tab; validator 0 lỗi.
-- Còn: ~29 form hệ thống (sao lưu, phân quyền, khai báo kỳ…) chưa làm. Chỉ làm phần cần trên web (người dùng / phân quyền ở
-  trang quản trị).
+- Còn: 30 form viết tay trong menu Medcom (người dùng, nhóm, phân quyền, lịch tài chính, số dư đầu, CCDC, tài sản, khóa sổ…).
+  Chủ dự án chốt 2026-11-13: trang quản trị chỉ là cấu hình riêng của BE; form nào của ERP thì **giữ trên web ERP như WinForms**,
+  không bỏ, không dời sang trang quản trị (khách đang dùng). Giai đoạn chỉ đọc: xem dữ liệu; nút thực hiện (tính giá, khấu hao,
+  sao lưu…) chờ M4.
+
+## Tên thay mã, tra cứu F4, phân trang (2026-11-13)
+
+- Đọc `SY_FrmDrdwTbl` của form (dòng của tên form chạy trước, bỏ `IsDisable`), cache cùng metadata form.
+- Lưới: cột có danh sách chọn mà `DisplayColumn` khác `ValueColumn` hiện **tên**, giữ mã làm giá trị máy (`td[data-value]`), như
+  GridEX hiện DisplayMember. Tên lưới khớp như WinForms: T0 `grdList`/`grdListDoc`, T1 `grdChitiet`, T2… `grdChitiet2`…;
+  form viết tay đặt key web `GN` trong tệp mô tả. `Caption` đổi tiêu đề cột, `isInvisible` ẩn cột.
+- Ô chứng từ (`GridName` rỗng, `ColumnID` = `Fld<Cột>` hoặc `<Cột>`): thành ô `lookup` (mã + `lookup-text` = tên thay mã, hoặc
+  `DisplayMember2` của ComboX). `Caption` của dòng đè nhãn LYT.
+- Tra cứu F4: `GET /erp/screens/{Form}/lookups/{Cột}?q=&p0=…` → `table[data-erp=lookup-result]`, tối đa 50 dòng + tổng, tìm LIKE
+  trên các cột chữ của `ColumnArr` (như `SearchTopRecord`), sắp theo cột giá trị. `p0…` = tham số `{0}`… của `ParaArr` lấy từ chứng từ.
+- Nguồn: chỉ câu `SELECT` (bỏ `ORDER BY` cuối), qua kiểm chỉ đọc, token và `{0}` thành tham số, trong giao dịch rollback. Thủ tục
+  (`…Stp`), `WITH`, SQL lỗi: giữ nguyên mã, màn vẫn mở. Danh sách tĩnh `ValueList`/`ValueLstCb`/`LangList` tách theo `ColumnArr`.
+  Tên tra theo lô (`IN`, 500 mã/câu). Tham số theo từng dòng lưới thì bỏ tên cột đó (giữ mã).
+- Phân trang: danh sách 1.000 dòng/trang, `OFFSET … FETCH` với thứ tự SO + khóa chính (trang không trùng/sót dòng);
+  `nav[data-erp=pager]` sau lưới, link giữ bộ lọc đang áp. Slot có `TRS` không phân trang (WinForms chỉ lấy top N).
+- Chạy thử trên bản sao MedData: 145 màn, 59 chứng từ: 249 ô tra cứu (87 có tên kèm), 438 lần F4 đều trả đúng; validator 0 lỗi.
