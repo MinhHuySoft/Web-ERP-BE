@@ -1,0 +1,37 @@
+// Duyệt / Khóa chứng từ — chỉ xem. Nguồn: ERP/SY_LockDocumentFrm.cs:668-754, 1036-1065. Không đọc SY_FrmCfg.
+// Gần đúng: chưa có tab "Chi tiết chứng từ" theo phân hệ; định khoản gộp theo cặp tài khoản như WinForms (FRM).
+{
+  "form": "SY_LockDocumentFrm",
+  "formType": "EDIT",
+  "caption": "Duyệt / Khóa chứng từ",
+  "useDbConfig": false,
+  "cfg": {
+    "SP": "9",
+    "DFP": "DocumentDate",
+    "SPA2": "1",
+    "WACT": "Duyệt/Khóa chứng từ;Mở khóa/Bỏ duyệt",
+    "T0": {
+      "TN": "vDocumentForLock",
+      "PK": "DocumentID",
+      "TN1": "vSourceListFull",
+      "TA1": "S",
+      "FKA1": "SourceID",
+      "FKB1": "SourceID",
+      "SE1": "S.SourceName",
+      "SO": "vDocumentForLock.SourceID, vDocumentForLock.DocumentDate, vDocumentForLock.DocumentID",
+      "HDE": "TableName",
+      "GD2": "SourceID;SourceName;IsLock;DocumentID;DocumentDate;ObjectID;Memo;AccountID"
+    },
+    "T1": {
+      "TN": "vGeneralAcc",
+      "PK": "DocumentID",
+      "MDL": "DocumentID",
+      "DCP": "Xem định khoản",
+      "FRM": "(SELECT SourceID, DocumentID, DebitAccID, CreditAccID, SUM(SourceAmount) AS SourceAmount, SUM(Amount) AS Amount FROM vGeneralAcc GROUP BY SourceID, DocumentID, DebitAccID, CreditAccID) vGeneralAcc",
+      "SO": "vGeneralAcc.DebitAccID, vGeneralAcc.CreditAccID",
+      "HDE": "DocumentID;SourceID",
+      "SUM": "SourceAmount;Amount",
+      "ACP": "SourceAmount;Amount"
+    }
+  }
+}

@@ -16,6 +16,11 @@ namespace WebErp.Erp.Screens;
 /// Màn hình dựng từ metadata ERP (M2 danh sách, M3 xem chứng từ). CHỈ ĐỌC: mọi câu chạy trong một giao dịch luôn rollback,
 /// đoạn SQL của metadata qua kiểm chỉ đọc, giá trị là tham số. Lọc ngầm như WinForms (tài liệu 10 §3.6): chứng từ của chính
 /// người dùng nếu không phải Manager/Admin, chi nhánh của người dùng, FTR/FTX của slot. Không chạy hook (ESL…) và nút lệnh.
+/// <para>
+/// Mở màn: như WinForms (<c>MainFrm.MenuClick</c> không kiểm <c>Permiss.View</c>), cửa chặn là MENU của người dùng — Host chỉ mở màn có
+/// trong <c>{Module}_GetUserMenuFnc</c> (user <c>Admin</c> thấy mọi menu; menu <c>isNotCheckPermission</c>). Cờ quyền chỉ quyết định phạm vi
+/// dữ liệu (người tạo, chỉ Thêm ⇒ không thấy gì, ẩn tiền, cột/tab theo Manager/Admin).
+/// </para>
 /// </summary>
 public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMetadata metadata, ErpPermissions permissions, TimeProvider time)
     : IErpScreens
@@ -34,15 +39,30 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
     [GeneratedRegex("^[A-Za-z_][A-Za-z0-9_]{0,99}$")]
     private static partial Regex Identifier();
 
+    /// <summary>
+    /// Cột bí mật KHÔNG BAO GIỜ gửi ra trình duyệt, dù cấu hình form nào (form người dùng đọc thẳng <c>SY_User</c>, form thiết lập kết nối
+    /// API có khóa/token): mật khẩu (hash kiểu cũ), mật mã, token, khóa API, chuỗi kết nối; và nội dung tệp đính kèm dạng chữ
+    /// (<c>Base64Content</c>…: nặng, có thể là tài liệu riêng — tải tệp là việc của đầu API đính kèm, có kiểm quyền).
+    /// </summary>
+    [GeneratedRegex(@"^(pass|pwd|matkhau|mat_khau)$|password|passwd|secret|token|api_?key|private_?key|connection_?string|connstr|^base64",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex SecretColumn();
+
+    internal static bool IsSecret(string column) => SecretColumn().IsMatch(column);
+
     /// <summary>Form viết tay chưa có tệp mô tả (<see cref="FormOverlays"/>): web chưa dựng được.</summary>
     private static bool IsHandCodedWithoutOverlay(string formName) => HandCodedForms.Names.Contains(formName) && !FormOverlays.Has(formName);
 
     public async Task<ListView> OpenListAsync(ScreenRequest req, CancellationToken ct)
     {
         var form = await metadata.GetFormAsync(req.Tenant, req.FormName, req.RuntimeName, ct);
+        if (form is { IsDialog: true, Master: null } && !IsHandCodedWithoutOverlay(req.FormName))
+        {
+            // Hộp thoại không có dữ liệu để xem (sao lưu, phục hồi…): chỉ thông tin + nút khóa.
+            return new ListView(ScreenStatus.Ok, form);
+        }
         if (form?.Master is not { } slot || IsHandCodedWithoutOverlay(req.FormName)) return new ListView(ScreenStatus.NotSupported, form);
         var ctx = await ContextAsync(req, form, ct);
-        if (!ctx.Perm.View) return new ListView(ScreenStatus.Forbidden, form);
         var src = await metadata.GetColumnsAsync(req.Tenant, slot.Source, ct);
 
         return await RunAsync(req.Tenant, async (c, tx) =>
@@ -84,11 +104,12 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
             cols = await WithNamesAsync(ctx, slot, cols, data.Rows, null, c, tx, ct);
 
             var keyIndex = Array.FindIndex(data.Names, n => n.Equals(slot.PrimaryKey, StringComparison.OrdinalIgnoreCase));
+            var tabs = await IndependentTabsAsync(ctx, form, ct);
             return new ListView(ScreenStatus.Ok, form, cols.Select(x => x.Col).ToList(),
                 data.Rows.Select(row => cols.Select(x => row[x.Index]).ToArray()).ToList(),
                 data.Rows.Select(row => keyIndex < 0 ? "" : Invariant(row[keyIndex])).ToList(),
                 total, sums, filters, keyIndex >= 0 ? slot.PrimaryKey : null, form.IsEdit && keyIndex >= 0,
-                Page: page, PageSize: paged ? take : 0);
+                Page: page, PageSize: paged ? take : 0, GroupBy: GroupBy(slot, cols), Tabs: tabs);
         }, e => new ListView(ScreenStatus.ConfigError, form, Note: e), ct);
     }
 
@@ -97,7 +118,6 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
         var form = await metadata.GetFormAsync(req.Tenant, req.FormName, req.RuntimeName, ct);
         if (form?.Master is not { } slot || !form.IsEdit || IsHandCodedWithoutOverlay(req.FormName)) return new RecordView(ScreenStatus.NotSupported, form);
         var ctx = await ContextAsync(req, form, ct);
-        if (!ctx.Perm.View) return new RecordView(ScreenStatus.Forbidden, form);
         var src = await metadata.GetColumnsAsync(req.Tenant, slot.Source, ct);
 
         return await RunAsync(req.Tenant, async (c, tx) =>
@@ -106,7 +126,7 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
             if (master is null) return new RecordView(ScreenStatus.NotFound, form, key);
             var tabs = await RecordTabsAsync(ctx, form, slot, master, c, tx, ct);
             var visible = new List<SlotMeta>();
-            foreach (var d in form.Details.Where(d => DetailVisible(ctx, form, d)))
+            foreach (var d in form.Details.Where(d => !d.Independent && DetailVisible(ctx, form, d)))
             {
                 // Tab tùy chọn: bảng không có trong DB của khách thì bỏ (WinForms kiểm sysobjects trước khi nạp).
                 if (d.Optional && (await metadata.GetColumnsAsync(req.Tenant, d.Source, ct)).Count == 0) continue;
@@ -120,35 +140,48 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
     public async Task<DetailView> OpenDetailAsync(ScreenRequest req, string key, string slotId, CancellationToken ct)
     {
         var form = await metadata.GetFormAsync(req.Tenant, req.FormName, req.RuntimeName, ct);
-        if (form?.Master is not { } slot || !form.IsEdit || IsHandCodedWithoutOverlay(req.FormName)) return new DetailView(ScreenStatus.NotSupported);
-        var detail = form.Details.FirstOrDefault(d => d.Id.Equals(slotId, StringComparison.OrdinalIgnoreCase));
+        var detail = form?.Details.FirstOrDefault(d => d.Id.Equals(slotId, StringComparison.OrdinalIgnoreCase));
+        // Tab độc lập (IND) mở được cả ở form danh sách, không cần chứng từ.
+        if (form?.Master is not { } slot || !form.IsEdit && detail?.Independent != true || IsHandCodedWithoutOverlay(req.FormName))
+            return new DetailView(ScreenStatus.NotSupported);
         if (detail is null) return new DetailView(ScreenStatus.NotFound);
         var ctx = await ContextAsync(req, form, ct);
-        if (!ctx.Perm.View || !DetailVisible(ctx, form, detail)) return new DetailView(ScreenStatus.Forbidden);
+        if (!DetailVisible(ctx, form, detail)) return new DetailView(ScreenStatus.Forbidden);
         var src = await metadata.GetColumnsAsync(req.Tenant, slot.Source, ct);
 
         return await RunAsync(req.Tenant, async (c, tx) =>
         {
-            var master = await MasterRowAsync(ctx, form, slot, src, key, c, tx, ct);
-            if (master is null) return new DetailView(ScreenStatus.NotFound);
-            // Nối master–detail: MUL (mặc định PK master) = MDL (mặc định PK master) (tài liệu 10 §4.3).
-            var masterField = detail.MasterField ?? slot.PrimaryKey;
-            var linkIndex = Array.FindIndex(master.Names, n => n.Equals(masterField, StringComparison.OrdinalIgnoreCase));
-            if (linkIndex < 0) return new DetailView(ScreenStatus.ConfigError, Note: $"Bảng chính không có cột nối {masterField}.");
+            var master = detail.Independent ? null : await MasterRowAsync(ctx, form, slot, src, key, c, tx, ct);
+            if (master is null && !detail.Independent) return new DetailView(ScreenStatus.NotFound);
             var q = new SlotQuery(detail, ctx.Resolve);
-            q.Where.Add($"{q.Col(detail.DetailField ?? slot.PrimaryKey)} = {q.Param(master.Rows[0][linkIndex])}");
-            if (detail.FilterWeb is not null) q.Where.Add(q.Fragment(detail.FilterWeb, $"{detail.Id}.FTW"));
-            if (detail.Filter is not null) q.Where.Add(q.Fragment(detail.Filter, $"{detail.Id}.FTR"));
-            if (detail.FilterEx is not null) q.Where.Add(q.Fragment(detail.FilterEx, $"{detail.Id}.FTX"));
+            if (master is not null)
+            {
+                // Nối master–detail: MUL (mặc định PK master) = MDL (mặc định PK master) (tài liệu 10 §4.3).
+                var masterField = detail.MasterField ?? slot.PrimaryKey;
+                var linkIndex = Array.FindIndex(master.Names, n => n.Equals(masterField, StringComparison.OrdinalIgnoreCase));
+                if (linkIndex < 0) return new DetailView(ScreenStatus.ConfigError, Note: $"Bảng chính không có cột nối {masterField}.");
+                q.Where.Add($"{q.Col(detail.DetailField ?? slot.PrimaryKey)} = {q.Param(master.Rows[0][linkIndex])}");
+            }
+            if (detail.Independent)
+            {
+                // Tab độc lập: lọc ngầm như một danh sách (quyền chỉ Thêm, người tạo, chi nhánh, FTW/FTR/FTX của slot).
+                await ImplicitFiltersAsync(ctx, form, q, await metadata.GetColumnsAsync(req.Tenant, detail.Source, ct), c, tx, includeToolbarFilter: true, ct);
+            }
+            else
+            {
+                if (detail.FilterWeb is not null) q.Where.Add(q.Fragment(detail.FilterWeb, $"{detail.Id}.FTW"));
+                if (detail.Filter is not null) q.Where.Add(q.Fragment(detail.Filter, $"{detail.Id}.FTR"));
+                if (detail.FilterEx is not null) q.Where.Add(q.Fragment(detail.FilterEx, $"{detail.Id}.FTX"));
+            }
             var data = await SqlReader.ReadAsync(c, tx, q.ListSql(Math.Min(DetailMax, detail.Top ?? DetailMax)), q.Parameters, ctx.Timeout, DetailMax, ct);
             var cols = Columns(ctx, detail, FormatKey(detail.Id), data.Names, data.Types);
-            cols = await WithNamesAsync(ctx, detail, cols, data.Rows, MasterValue(master), c, tx, ct);
+            cols = await WithNamesAsync(ctx, detail, cols, data.Rows, master is null ? null : MasterValue(master), c, tx, ct);
             var keyIndex = Array.FindIndex(data.Names, n => n.Equals(detail.PrimaryKey, StringComparison.OrdinalIgnoreCase));
             return new DetailView(ScreenStatus.Ok, detail.Id, cols.Select(x => x.Col).ToList(),
                 data.Rows.Select(row => cols.Select(x => row[x.Index]).ToArray()).ToList(),
                 data.Rows.Select(row => keyIndex < 0 ? "" : Invariant(row[keyIndex])).ToList(), data.Rows.Count,
                 cols.Where(x => x.Col.Sum).ToDictionary(x => x.Col.Field, x => SumRows(data.Rows, x.Index), StringComparer.OrdinalIgnoreCase),
-                keyIndex >= 0 ? detail.PrimaryKey : null);
+                keyIndex >= 0 ? detail.PrimaryKey : null, GroupBy: GroupBy(detail, cols));
         }, e => new DetailView(ScreenStatus.ConfigError, Note: e), ct);
     }
 
@@ -326,7 +359,7 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
         var text = ctx.Req.Query.GetValueOrDefault("q")?.Trim() ?? "";
         filters.Add(new ViewFilter("q", "Tìm nhanh", "search", text));
         if (text.Length == 0) return;
-        var cols = new[] { q.Slot.PrimaryKey }.Concat(q.Slot.Order).Where(src.Contains).Distinct(StringComparer.OrdinalIgnoreCase).Take(8).ToList();
+        var cols = new[] { q.Slot.PrimaryKey }.Concat(q.Slot.Order).Where(c => src.Contains(c) && !IsSecret(c)).Distinct(StringComparer.OrdinalIgnoreCase).Take(8).ToList();
         if (cols.Count == 0) return;
         var p = q.Param($"%{text.Replace("[", "[[]", StringComparison.Ordinal)}%");
         q.Where.Add(string.Join(" OR ", cols.Select(col => $"{q.Col(col)} LIKE {p}")));
@@ -364,7 +397,7 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
                 {
                     if (l.ControlType is 22 or 23 or 24 or 26 or 30) continue; // nút, nhóm, HTML: không có ở chế độ xem
                     if (l.VisiblePermiss == 7 && !ctx.Perm.SeesAll || l.VisiblePermiss == 9 && !ctx.Perm.Admin) continue;
-                    if (removed.Contains(l.Field) || !index.TryGetValue(l.Field, out var i)) continue;
+                    if (removed.Contains(l.Field) || IsSecret(l.Field) || !index.TryGetValue(l.Field, out var i)) continue;
                     // Caption của SY_FrmDrdwTbl đè nhãn LYT (FormControler.SetEditorArr, khi ngôn ngữ VN).
                     var dd = form.MasterDropdown(l.Field);
                     var caption = dd?.Caption ?? l.Caption ?? ctx.Form.Captions.GetValueOrDefault($"C:{l.Field}") ?? Title(ctx, "F0", l.Field);
@@ -384,7 +417,7 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
             for (var i = 0; i < master.Names.Length; i++)
             {
                 var n = master.Names[i];
-                if (removed.Contains(n) || hidden.Contains(n) || master.Types[i] == typeof(byte[])) continue;
+                if (removed.Contains(n) || hidden.Contains(n) || master.Types[i] == typeof(byte[]) || IsSecret(n)) continue;
                 var dd = form.MasterDropdown(n);
                 var caption = dd?.Caption ?? ctx.Form.Captions.GetValueOrDefault($"C:{n}") ?? Title(ctx, "F0", n);
                 fields.Add(await LookupFieldAsync(ctx, slot, dd, Field(ctx, n, caption, 0, master.Types[i], row[i], 10, 1, false), 0, value, c, tx, ct));
@@ -418,6 +451,18 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
         if (!d.IsValueList && LookupSource(d) is null) return f;
         var (text, paras) = await MasterLookupAsync(ctx, slot, d, f.Value, master, c, tx, ct);
         return f with { Control = "lookup", Text = text, LookupParas = paras, Decimals = null };
+    }
+
+    /// <summary>Tab độc lập (IND) của form: hiện dưới lưới danh sách; tab tùy chọn (OPT) bỏ nếu bảng không có ở DB của khách.</summary>
+    private async Task<List<ViewDetailTab>> IndependentTabsAsync(Ctx ctx, FormMeta form, CancellationToken ct)
+    {
+        var tabs = new List<ViewDetailTab>();
+        foreach (var d in form.Details.Where(d => d.Independent && DetailVisible(ctx, form, d)))
+        {
+            if (d.Optional && (await metadata.GetColumnsAsync(ctx.Req.Tenant, d.Source, ct)).Count == 0) continue;
+            tabs.Add(new ViewDetailTab(d.Id, d.Caption ?? d.Id));
+        }
+        return tabs;
     }
 
     /// <summary>Giá trị một cột của dòng chứng từ (null nếu không có cột).</summary>
@@ -460,7 +505,7 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
         foreach (var i in gd2.Concat(Enumerable.Range(0, names.Length)).Distinct())
         {
             var n = names[i];
-            if (removed.Contains(n) || types[i] == typeof(byte[])) continue;
+            if (removed.Contains(n) || types[i] == typeof(byte[]) || IsSecret(n)) continue;
             var (kind, decimals) = Kind(ctx, n, types[i], amount.Contains(n));
             // SY_FrmDrdwTbl của lưới: Caption đổi tiêu đề, isInvisible ẩn cột (SetDropdownFromConfig).
             var dd = ctx.Form.GridDropdown(slot, n);
@@ -488,6 +533,14 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
         if (id.StartsWith('Q')) return ("quantity", f?.Decimals ?? (integral ? 0 : 2));
         if (id.StartsWith('P')) return ("percent", f?.Decimals ?? 0);
         return ("number", f?.Decimals ?? (integral ? 0 : 2));
+    }
+
+    /// <summary>Cột nhóm mặc định (GCA) có trong lưới, nối bằng dấu phẩy (chuẩn 11.1 <c>data-group-by</c>).</summary>
+    private static string? GroupBy(SlotMeta slot, List<(int Index, ViewColumn Col)> cols)
+    {
+        var g = MetadataCompiler.List(slot.GroupBy).Select(x => cols.FirstOrDefault(c => c.Col.Field.Equals(x, StringComparison.OrdinalIgnoreCase)).Col?.Field)
+            .OfType<string>().ToList();
+        return g.Count == 0 ? null : string.Join(",", g);
     }
 
     private static string FormatKey(string slotId) =>

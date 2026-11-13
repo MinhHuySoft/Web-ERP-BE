@@ -1,0 +1,64 @@
+// Định nghĩa phân bổ chi phí trả trước. Nguồn: ERP/GJ_AllocateSetupFrm.cs:1128-1167 (bảng), :836-1057 (ô phiếu).
+// Đọc SY_FrmCfg (LoadLayout) nhưng bảng viết cứng. Form tự tạo GJ_AllocatePeriodSetupTbl và cột NgayChungTu khi mở → OPT.
+// WinForms luôn lọc người tạo với user thường (:1175-1182), kể cả khi DB có SPA2 (FTW).
+// Lọc chi nhánh: WinForms không lọc ở form này; web vẫn lọc theo chi nhánh của người dùng (chờ chủ dự án chốt SPA3).
+{
+  "form": "GJ_AllocateSetupFrm",
+  "formType": "EDIT",
+  "caption": "Định nghĩa phân bổ chi phí trả trước",
+  "useDbConfig": true,
+  "cfg": {
+    "T1V": "Chứng từ",
+    "WACT": "Tạo phân bổ hàng tháng thủ công",
+    "T0": {
+      "TN": "GJ_AllocateSetupTbl",
+      "PK": "AllocateID",
+      "SO": "GJ_AllocateSetupTbl.AllocateDate desc, GJ_AllocateSetupTbl.AllocateID",
+      "SUM": "AllocateAmount;OpenAllocate",
+      "ACP": "AllocateAmount;OpenAllocate",
+      "FTW": "({ISMANAGER} = 1 OR GJ_AllocateSetupTbl.UserCreate = {USER})",
+      "GD2": "AllocateID;AllocateName;AllocateAmount;AllocateDate;RefDoc;RefSourceID;ItemID;AccountID;ExpenseAccID;OpenAllocate;MonthUse;CostCenterID;CostID;Notes;ObjectID;StopDate;BranchID"
+    },
+    "LYT1": {
+      "AllocateID": "1;20;1;1;;;;Mã phân bổ",
+      "RefDoc": "1;20;1;;;;;CT tham chiếu",
+      "NgayChungTu": "4;20;1;1;;;;Ngày chứng từ",
+      "RefSourceID": "2;20;1;;;;;Tham chiếu phân hệ",
+      "AllocateDate": "4;20;1;1;;;;Ngày phân bổ",
+      "BranchID": "2;20;1;;;;;Chi nhánh",
+      "AllocateName": "1;40;1;1;;;;Tên phân bổ",
+      "Notes": "1;40;1;1;;;;Ghi chú",
+      "AccountID": "2;20;1;1;;;;Tài khoản trả trước",
+      "ObjectID": "2;20;1;;;;;Đối tượng",
+      "ExpenseAccID": "2;20;1;1;;;;Tài khoản PB chi phí",
+      "CostCenterID": "2;20;1;;;;;Hạng mục",
+      "AllocateAmount": "5;20;1;1;;;;Số tiền phân bổ",
+      "CostID": "2;20;1;;;;;Mục phí",
+      "OpenAllocate": "5;20;1;1;;;;Số tiền PB đầu kỳ",
+      "DepartmentID": "2;20;1;;;;;Phòng ban",
+      "MonthUse": "5;20;1;1;;;;Số tháng phân bổ",
+      "StopDate": "4;20;1;;;;;Ngày ngừng phân bổ"
+    },
+    "T1": {
+      "TN": "GJ_AllocatePeriodSetupTbl",
+      "PK": "UserAutoID",
+      "MDL": "AllocateID",
+      "DCP": "Thiết lập các kỳ phân bổ",
+      "SO": "PeriodID",
+      "HDE": "AllocateID",
+      "SUM": "FixAllocateAmount",
+      "ACP": "FixAllocateAmount",
+      "OPT": "1"
+    },
+    "T2": {
+      "TN": "GJ_AllocatePeriodTbl",
+      "PK": "UserAutoID",
+      "MDL": "AllocateID",
+      "DCP": "Thông tin đã phân bổ",
+      "SO": "DocumentDate desc",
+      "HDE": "AllocateID;AllocateName;AllocateAmount",
+      "SUM": "OpenAllocate;PeriodAmount",
+      "ACP": "Amount;OpenAllocate;PeriodAmount;EndAllocate;RemainAmount"
+    }
+  }
+}

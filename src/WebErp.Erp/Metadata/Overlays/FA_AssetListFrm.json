@@ -1,0 +1,73 @@
+// Danh mục tài sản. Nguồn: ERP/FA_AssetListFrm.cs:1921-2143. Form đọc SY_FrmCfg (T0, T4–T6, LYT, T1V…) nên DB đứng trước.
+// WinForms bỏ qua SPA2 và luôn lọc người tạo với user thường (FTW). Tệp đính kèm: chỉ siêu dữ liệu.
+// Lọc chi nhánh: WinForms không lọc ở form này; web vẫn lọc theo chi nhánh của người dùng (chờ chủ dự án chốt SPA3).
+{
+  "form": "FA_AssetListFrm",
+  "formType": "EDIT",
+  "caption": "Danh mục tài sản",
+  "useDbConfig": true,
+  "cfg": {
+    "WACT": "Tạo phân bổ hàng tháng thủ công",
+    "T0": {
+      "TN": "FA_AssetTbl",
+      "PK": "AssetID",
+      "SO": "FA_AssetTbl.AssetID",
+      "SUM": "Amount;SourceAmount;OpenDepre",
+      "ACP": "Amount;SourceAmount;OpenDepre",
+      "FTW": "({ISMANAGER} = 1 OR FA_AssetTbl.UserCreate = {USER})"
+    },
+    "T1": {
+      "TN": "FA_AssetDepreTbl",
+      "PK": "UserAutoID",
+      "MDL": "AssetID",
+      "DCP": "Thông tin đã khấu hao",
+      "SO": "DocumentDate, OpenDepre desc",
+      "HDE": "AssetID;AssetName;Amount",
+      "SUM": "DepreAmount",
+      "ACP": "Amount;OpenDepre;DepreAmount;EndDepre;RemainAmount"
+    },
+    "T2": {
+      "TN": "FA_AssetLogTbl",
+      "PK": "UserAutoID",
+      "MDL": "AssetID",
+      "DCP": "Quá trình sử dụng",
+      "SO": "FA_AssetLogTbl.Date desc",
+      "HDE": "AssetID",
+      "SUM": "ExpenseAmount",
+      "ACP": "ExpenseAmount"
+    },
+    "T3": {
+      "TN": "FA_AssetPeriodSetupTbl",
+      "PK": "UserAutoID",
+      "MDL": "AssetID",
+      "DCP": "Thiết lập các kỳ phân bổ",
+      "SO": "PeriodID",
+      "HDE": "AssetID",
+      "SUM": "FixAllocateAmount",
+      "ACP": "FixAllocateAmount",
+      "OPT": "1"
+    },
+    "TA": {
+      "TN": "FA_AssetAttachTbl",
+      "PK": "UserAutoID",
+      "MDL": "AssetID",
+      "DCP": "Hình ảnh",
+      "SE": "FA_AssetAttachTbl.UserAutoID, FA_AssetAttachTbl.AssetID, FA_AssetAttachTbl.STT, FA_AssetAttachTbl.FileName, FA_AssetAttachTbl.FileType, FA_AssetAttachTbl.FileSize",
+      "FTW": "FA_AssetAttachTbl.STT = '1'",
+      "HDE": "AssetID",
+      "SO": "FA_AssetAttachTbl.STT",
+      "OPT": "1"
+    },
+    "TB": {
+      "TN": "FA_AssetAttachTbl",
+      "PK": "UserAutoID",
+      "MDL": "AssetID",
+      "DCP": "File đính kèm",
+      "SE": "FA_AssetAttachTbl.UserAutoID, FA_AssetAttachTbl.AssetID, FA_AssetAttachTbl.STT, FA_AssetAttachTbl.FileName, FA_AssetAttachTbl.FileType, FA_AssetAttachTbl.FileSize",
+      "FTW": "FA_AssetAttachTbl.STT IN ('2', '3', '4')",
+      "HDE": "AssetID",
+      "SO": "FA_AssetAttachTbl.STT",
+      "OPT": "1"
+    }
+  }
+}

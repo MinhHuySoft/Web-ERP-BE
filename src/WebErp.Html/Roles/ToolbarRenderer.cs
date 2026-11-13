@@ -16,7 +16,8 @@ public sealed record ToolbarItem(
     string? Confirm = null,
     string? Target = null,
     bool Disabled = false,
-    string? Shortcut = null);
+    string? Shortcut = null,
+    string? Title = null);
 
 /// <summary><c>menu[data-erp=toolbar]</c> (chuẩn 7).</summary>
 public static class ToolbarRenderer
@@ -35,9 +36,10 @@ public static class ToolbarRenderer
             }
             else
             {
-                w.Element("button", i.Text, ("type", "submit"), ("form", i.Form), ("formaction", i.FormAction), ("formmethod", "post"),
-                    ("data-action", i.Action), ("data-icon", i.Icon), ("data-shortcut", i.Shortcut), ("data-confirm", i.Confirm),
-                    Attr.Flag("disabled", i.Disabled));
+                // Nút không gắn form (chỉ hiện cho giống ERP, đang khóa): type=button, không gửi gì.
+                w.Element("button", i.Text, ("type", i.Form is null ? "button" : "submit"), ("form", i.Form), ("formaction", i.FormAction),
+                    ("formmethod", i.Form is null ? null : "post"), ("data-action", i.Action), ("data-icon", i.Icon), ("data-shortcut", i.Shortcut),
+                    ("data-confirm", i.Confirm), ("title", i.Title), Attr.Flag("disabled", i.Disabled));
             }
             w.Close("li").Line();
         }

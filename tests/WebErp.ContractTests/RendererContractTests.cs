@@ -43,6 +43,8 @@ public sealed class RendererContractTests(FrontendValidator validator) : IClassF
             MetaScreens.Record(SampleScreens.Record("PO/001"), "Đề nghị mua hàng", "05011", MetaUrls, "__RequestVerificationToken", "t"),
             MetaScreens.Detail(SampleScreens.Detail(), "Hàng hóa đề nghị"),
             MetaScreens.Lookup(SampleScreens.Lookup(), "Nhà cung cấp"),
+            MetaScreens.List(SampleScreens.Dialog(), "Sao lưu dữ liệu", "010118", MetaUrls),
+            MetaScreens.List(SampleScreens.ListWithTabs(), "Khai báo lịch tài chính", "010107", MetaUrls),
             MetaScreens.List(SampleScreens.List() with { Page = 2 }, "Đề nghị mua hàng", "05011", MetaUrls),
             MetaScreens.ConfigError("BAD_ConfigFrm", null, "Form cấu hình xấu", "Đoạn SQL 'T0.FTX' trong cấu hình form không chạy được."),
         };

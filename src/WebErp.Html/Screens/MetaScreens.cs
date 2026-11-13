@@ -23,11 +23,18 @@ public static class MetaScreens
     {
         var form = v.Form!;
         var isEdit = form.IsEdit;
+        var actions = Actions(form);
         var messages = new List<ErpMessage>();
-        return ScreenRenderer.Render(new ScreenModel(form.FormName, isEdit ? FormTypes.Edit : FormType(form.FormType), form.RuntimeName, title,
+        if (actions.Count > 0) messages.Add(ErpMessage.Info(PendingNote));
+        var type = isEdit ? FormTypes.Edit : form.IsDialog ? FormTypes.Custom : FormType(form.FormType);
+        return ScreenRenderer.Render(new ScreenModel(form.FormName, type, form.RuntimeName, title,
             Mode: isEdit ? "find" : "view", Para: urls.Para, MenuId: menuId, RefreshSrc: urls.Refresh, Messages: messages), w =>
         {
-            ToolbarRenderer.Write(w, [new ToolbarItem("reload", "Nạp lại", Href: urls.Refresh, Target: "self", Shortcut: "F5")]);
+            ToolbarRenderer.Write(w, [new ToolbarItem("reload", "Nạp lại", Href: urls.Refresh, Target: "self", Shortcut: "F5"), .. actions]);
+            // Mô tả chức năng của hộp thoại (key web WNOTE, nhiều đoạn cách nhau "|").
+            foreach (var p in (form.Setting("WNOTE") ?? "").Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                w.Element("p", p).Line();
+            if (form.IsDialog && v.Columns is not { Count: > 0 }) return;
             FilterRenderer.Write(w, new FilterModel($"flt-{form.RuntimeName}", urls.Self, (v.Filters ?? []).Select(FilterField).ToList(),
                 urls.Para is null ? null : [("para", urls.Para)]));
             var rows = v.Rows ?? [];
@@ -35,8 +42,11 @@ public static class MetaScreens
             if (!paged && v.Total > rows.Count)
                 w.Element("p", $"Đang hiện {rows.Count.ToString("N0", Vi)} trên {v.Total.ToString("N0", Vi)} dòng. Thu hẹp bộ lọc để xem phần còn lại.").Line();
             GridRenderer.Write(w, Grid("T0", v.Columns ?? [], rows, v.Keys ?? [], v.KeyField, v.Total, v.Sums,
-                v.CanOpenRecord ? urls.Record : null));
+                v.CanOpenRecord ? urls.Record : null, v.GroupBy));
             if (paged) PagerRenderer.Write(w, new PagerModel(v.Page, v.PageSize, v.Total, urls.Page!));
+            // Tab độc lập (IND): lưới không nối dòng nào của danh sách, nạp lười như tab chi tiết (khóa "-").
+            if (v.Tabs is { Count: > 0 })
+                TabsRenderer.Write(w, v.Tabs.Select(d => new TabPanelModel(d.Id, d.Title, urls.Detail("-", d.Id))).ToList());
         });
     }
 
@@ -58,7 +68,18 @@ public static class MetaScreens
 
     /// <summary>Nội dung một tab chi tiết nạp lười: chỉ có lưới.</summary>
     public static string Detail(DetailView v, string title) =>
-        HtmlPage.Render(title, w => GridRenderer.Write(w, Grid(v.SlotId ?? "T1", v.Columns ?? [], v.Rows ?? [], v.Keys ?? [], v.KeyField, v.Total, v.Sums, null)));
+        HtmlPage.Render(title, w => GridRenderer.Write(w, Grid(v.SlotId ?? "T1", v.Columns ?? [], v.Rows ?? [], v.Keys ?? [], v.KeyField, v.Total, v.Sums, null, v.GroupBy)));
+
+    private const string PendingNote =
+        "Bản web hiện chỉ xem dữ liệu. Các nút thực hiện của màn này (giống ERP) sẽ dùng được khi web có chức năng ghi dữ liệu.";
+
+    /// <summary>
+    /// Nút thực hiện của form viết tay (key web <c>WACT</c> trong tệp mô tả, cách nhau <c>;</c>): hiện đúng như ERP nhưng khóa, vì web chưa
+    /// ghi (M4). Không gắn form, không URL: bấm không gửi gì.
+    /// </summary>
+    private static List<ToolbarItem> Actions(FormMeta form) =>
+        (form.Setting("WACT") ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(a => new ToolbarItem("custom", a, Disabled: true, Title: "Chưa dùng được trên bản web (chờ chức năng ghi dữ liệu)")).ToList();
 
     /// <summary>Kết quả tra cứu F4 (chuẩn 10): chỉ có bảng <c>lookup-result</c>.</summary>
     public static string Lookup(LookupView v, string title) =>
@@ -77,7 +98,7 @@ public static class MetaScreens
         });
 
     private static GridModel Grid(string id, IReadOnlyList<ViewColumn> columns, IReadOnlyList<object?[]> rows, IReadOnlyList<string> keys,
-        string? keyField, int total, IReadOnlyDictionary<string, decimal>? sums, Func<string, string>? recordUrl)
+        string? keyField, int total, IReadOnlyDictionary<string, decimal>? sums, Func<string, string>? recordUrl, string? groupBy = null)
     {
         var keyColumn = keyField is null ? -1 : columns.ToList().FindIndex(c => c.Field.Equals(keyField, StringComparison.OrdinalIgnoreCase) && !c.Hidden);
         var gridColumns = columns.Select((c, i) => new GridColumn(c.Field, c.Title, recordUrl is not null && i == keyColumn ? "link" : c.Type, c.Width,
@@ -92,7 +113,7 @@ public static class MetaScreens
             .ToDictionary(s => s.Key, s => Number(s.Value, columns.First(c => c.Field.Equals(s.Key, StringComparison.OrdinalIgnoreCase)).Decimals),
                 StringComparer.OrdinalIgnoreCase);
         return new GridModel(id, gridColumns, gridRows, keyField is null || keys.Count == 0 ? null : keyField, Selectable: "single",
-            TotalRows: total, Totals: totals);
+            TotalRows: total, Totals: totals, GroupBy: groupBy);
     }
 
     /// <summary>Giá trị → (chữ hiển thị, giá trị máy bất biến) theo chuẩn 2.5.</summary>

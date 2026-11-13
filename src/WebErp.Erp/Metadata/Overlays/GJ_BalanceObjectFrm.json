@@ -1,0 +1,28 @@
+// Số dư công nợ đối tượng. Nguồn: ERP/GJ_BalanceObjectFrm.cs:308-351 (viết cứng :327; IsBalance = 1 luôn áp). Đọc SY_FrmCfg.
+// Cột Nợ/Có (SourceDebit…) do form tự ALTER thêm và chỉ đồng bộ khi bật chế độ Nợ/Có nên ẩn sẵn.
+// WinForms không lọc người tạo ở form số dư (SPA2).
+// Lọc chi nhánh: WinForms không lọc ở form này; web vẫn lọc theo chi nhánh của người dùng (chờ chủ dự án chốt SPA3).
+{
+  "form": "GJ_BalanceObjectFrm",
+  "formType": "LIST",
+  "caption": "Số dư công nợ đối tượng",
+  "useDbConfig": true,
+  "cfg": {
+    "SPA2": "1",
+    "T0": {
+      "TN": "SY_BalanceObjectTbl",
+      "PK": "UserAutoID",
+      "TN1": "CF_ObjectTbl",
+      "TA1": "O",
+      "FKA1": "ObjectID",
+      "FKB1": "ObjectID",
+      "SE1": "O.ObjectName, O.Address",
+      "FTW": "SY_BalanceObjectTbl.IsBalance = 1",
+      "SO": "SY_BalanceObjectTbl.AccountID, SY_BalanceObjectTbl.ObjectID",
+      "HDE": "IsBalance;SourceDebit;SourceCredit;AmountDebit;AmountCredit",
+      "SUM": "SourceAmount;Amount",
+      "ACP": "SourceAmount;Amount;SourceDebit;SourceCredit;AmountDebit;AmountCredit",
+      "GD2": "AccountID;ObjectID;ObjectName;SourceAmount;CurrencyID;RateExchange;Amount;IsDebit;ItemID;Quantity;SourceID;DocumentID;DocumentDate;InvoiceNo;Memo;CostCenterID;PeriodID;ContractID;BranchID"
+    }
+  }
+}

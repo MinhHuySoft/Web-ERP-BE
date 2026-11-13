@@ -1,0 +1,29 @@
+// Danh mục nhóm người dùng. Nguồn: Tools.SysForm/NguoiDungNhomFrm.cs:646-689 (SetData 652-653).
+// Không đọc SY_FrmCfg. Lọc chi nhánh như WinForms (FTW): user không có chi nhánh thấy mọi nhóm.
+// Web không chạy CREATE INDEX / {Mod}_Update_Permission như lúc mở form WinForms.
+{
+  "form": "NguoiDungNhomFrm",
+  "formType": "EDIT",
+  "caption": "Danh mục nhóm người dùng",
+  "useDbConfig": false,
+  "cfg": {
+    "SPA2": "1",
+    "SPA3": "1",
+    "WACT": "Thêm;Sửa;Xóa",
+    "T0": {
+      "TN": "SY_UserGroup",
+      "PK": "UserGroupID",
+      "EX": "(SELECT COUNT(*) FROM SY_User U WHERE U.UserGroupID = SY_UserGroup.UserGroupID) AS CountUser",
+      "FTW": "COALESCE({BranchID}, '') = '' OR SY_UserGroup.BranchID = {BranchID}",
+      "SO": "SY_UserGroup.UserGroupID"
+    },
+    "T1": {
+      "TN": "SY_UserGroupDetail",
+      "PK": "UserAutoID",
+      "MDL": "UserGroupID",
+      "DCP": "Hiển thị bảng thông tin chung",
+      "HDE": "UserGroupID",
+      "SO": "SY_UserGroupDetail.KeyID"
+    }
+  }
+}

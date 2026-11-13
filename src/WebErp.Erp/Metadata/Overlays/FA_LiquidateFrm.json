@@ -1,0 +1,34 @@
+// Thanh lý tài sản. Nguồn: ERP/FA_LiquidateFrm.cs:482-540; không đọc SY_FrmCfg.
+// Lọc chi nhánh: WinForms không lọc ở form này; web vẫn lọc theo chi nhánh của người dùng (chờ chủ dự án chốt SPA3).
+{
+  "form": "FA_LiquidateFrm",
+  "formType": "EDIT",
+  "caption": "Thanh lý tài sản",
+  "useDbConfig": false,
+  "cfg": {
+    "SP": "9",
+    "DFP": "DocumentDate",
+    "T0": {
+      "TN": "FA_LiquidateTbl",
+      "PK": "DocumentID",
+      "SO": "FA_LiquidateTbl.DocumentDate, FA_LiquidateTbl.DocumentID",
+      "SUM": "BaseTotal",
+      "ACP": "BaseTotal"
+    },
+    "T1": {
+      "TN": "FA_LiquidateDetailTbl",
+      "PK": "UserAutoID",
+      "MDL": "DocumentID",
+      "DCP": "Chi tiết thanh lý",
+      "TN1": "FA_AssetTbl",
+      "TA1": "A",
+      "FKA1": "AssetID",
+      "FKB1": "AssetID",
+      "SE1": "A.AssetName, A.Unit",
+      "SO": "FA_LiquidateDetailTbl.UserAutoID",
+      "HDE": "DocumentID",
+      "SUM": "ResidualAmount;LiquidateAmount;ChiPhiTL",
+      "ACP": "ResidualAmount;LiquidateAmount;ChiPhiTL"
+    }
+  }
+}

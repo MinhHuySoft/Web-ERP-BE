@@ -78,6 +78,20 @@ public sealed class LookupTests
         Assert.Null(form.MasterDropdown("StatusID"));
     }
 
+    [Theory]
+    [InlineData("Password", true)]
+    [InlineData("PassWord", true)]
+    [InlineData("Pass", true)]
+    [InlineData("OldPassword", true)]
+    [InlineData("ApiKey", true)]
+    [InlineData("Api_Key", true)]
+    [InlineData("AccessToken", true)]
+    [InlineData("ClientSecret", true)]
+    [InlineData("UserName", false)]
+    [InlineData("isPass", false)]
+    [InlineData("PassportNo", false)]
+    public void Secret_columns_are_never_sent(string column, bool secret) => Assert.Equal(secret, ErpScreens.IsSecret(column));
+
     [Fact]
     public void Code_key_ignores_trailing_spaces_and_is_invariant()
     {

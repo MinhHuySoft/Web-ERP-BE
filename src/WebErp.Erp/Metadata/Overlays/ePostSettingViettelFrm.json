@@ -1,0 +1,36 @@
+// Thiết lập kết nối API với VIETTEL POST. Nguồn: ERP/ePostSettingViettelFrm.cs:1241-1327; ERP.ePOST/VIETTELPost_API.cs:381-440.
+// KHÔNG BAO GIỜ gửi Password…Password6 (mã hóa bằng khóa cố định trong exe = như chữ thường): SE liệt kê cột, BE chặn mọi cột mật khẩu.
+// Không gọi API ngoài. Lưới phụ là tab độc lập (IND).
+// Lọc chi nhánh: WinForms không lọc ở form này; web vẫn lọc theo chi nhánh của người dùng (chờ chủ dự án chốt SPA3).
+{
+  "form": "ePostSettingViettelFrm",
+  "formType": "EDIT",
+  "caption": "Thiết lập kết nối API với VIETTEL POST",
+  "useDbConfig": false,
+  "cfg": {
+    "WACT": "Kiểm tra kết nối;Lưu",
+    "T0": {
+      "TN": "EP_SettingTbl",
+      "PK": "UserAutoID",
+      "SE": "EP_SettingTbl.UserAutoID, EP_SettingTbl.SuplierType, EP_SettingTbl.BranchID, EP_SettingTbl.UserName, EP_SettingTbl.UserName2, EP_SettingTbl.UserName3, EP_SettingTbl.UserName4, EP_SettingTbl.UserName5, EP_SettingTbl.UserName6",
+      "FTW": "EP_SettingTbl.SuplierType = 1",
+      "SO": "EP_SettingTbl.BranchID",
+      "HDE": "SuplierType",
+      "GD2": "BranchID;UserName;UserName2;UserName3;UserName4;UserName5;UserName6"
+    },
+    "T1": {
+      "IND": "1",
+      "TN": "EP_SenderListTbl",
+      "PK": "STT",
+      "DCP": "Người gởi / điểm lấy hàng",
+      "SO": "EP_SenderListTbl.STT"
+    },
+    "T2": {
+      "IND": "1",
+      "TN": "EP_Order_ServiceTbl",
+      "PK": "ORDER_SERVICE",
+      "DCP": "Loại hình dịch vụ",
+      "SO": "EP_Order_ServiceTbl.ORDER_SERVICE"
+    }
+  }
+}

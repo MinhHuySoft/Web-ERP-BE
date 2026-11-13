@@ -1,0 +1,50 @@
+// Thiết lập bảng cân đối kế toán. Nguồn: ERP/GJ_BalanceSheetSetupFrm.cs:600-625. Không đọc SY_FrmCfg.
+// Ô "Mẫu" (vStatementType Type='BS') như WinForms, mặc định QD15.
+{
+  "form": "GJ_BalanceSheetSetupFrm",
+  "formType": "EDIT",
+  "caption": "Thiết lập bảng cân đối kế toán",
+  "useDbConfig": false,
+  "flt": [
+    {
+      "KeyID": "1",
+      "ColumnID": "GroupID",
+      "Caption": "Mẫu",
+      "Type": 3,
+      "Source": "SELECT GroupID, GroupName FROM vStatementType WHERE Type = 'BS'",
+      "ValueColumn": "GroupID",
+      "DisplayColumn": "GroupName",
+      "Operator": 0,
+      "DefaultValue": "QD15"
+    }
+  ],
+  "cfg": {
+    "SPA2": "1",
+    "T1V": "Chi tiết",
+    "T0": {
+      "TN": "GJ_BSSetupTbl",
+      "PK": "SetupID",
+      "SO": "GJ_BSSetupTbl.CodeID, GJ_BSSetupTbl.SetupID",
+      "HDE": "SetupID;GroupID",
+      "GD2": "CodeID;CodeName;CodeName2;Statement;Priority;IsBold;IsLeft;IsNotPrint"
+    },
+    "LYT1": {
+      "CodeID": "1;14;1;1;;;;Mã số",
+      "Statement": "1;14;1;;;;;Thuyết minh",
+      "CodeName": "1;40;2;1;;;;Chỉ tiêu",
+      "CodeName2": "1;40;2;1;;;;Chỉ tiêu 2",
+      "Priority": "5;13;1;1;;;;Độ ưu tiên",
+      "IsBold": "6;9;1;;;;;In đậm",
+      "IsLeft": "6;9;1;;;;;Canh trái",
+      "IsNotPrint": "6;9;1;;;;;Không in trong bc"
+    },
+    "T1": {
+      "TN": "GJ_BSSetupDetailTbl",
+      "PK": "UserAutoID",
+      "MDL": "SetupID",
+      "DCP": "Chi tiết",
+      "SO": "AccountID, SumID",
+      "HDE": "SetupID"
+    }
+  }
+}

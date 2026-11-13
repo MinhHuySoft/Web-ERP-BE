@@ -1,0 +1,27 @@
+// Danh mục người sử dụng. Nguồn: Tools.SysForm/NguoiDungFrm.cs:748-868 (SetData 794, lưới 799-801).
+// Form có đọc SY_FrmCfg (LoadLayout) nên cấu hình DB đứng trước (MedData: T0 SY_User, GD2, HDE). KHÔNG BAO GIỜ gửi SY_User.Password:
+// SE liệt kê cột, và BE chặn mọi cột mật khẩu (ErpScreens.IsSecret).
+{
+  "form": "NguoiDungFrm",
+  "formType": "LIST",
+  "caption": "Danh mục người sử dụng",
+  "useDbConfig": true,
+  "cfg": {
+    "SPA2": "1",
+    "SPA3": "1",
+    "WACT": "Thêm;Sửa;Xóa;Reset / Xóa / Đặt lại mật mã;Phân quyền;Chuyển dữ liệu người dùng",
+    "T0": {
+      "TN": "SY_User",
+      "PK": "UserName",
+      "GN": "grdList",
+      "SE": "SY_User.UserName, SY_User.HoTen, SY_User.TenNgan, SY_User.Manager, SY_User.PM, SY_User.Disable, SY_User.UserGroupID, SY_User.UserAuthority, SY_User.BranchID, SY_User.CeoID, SY_User.ManagerID, SY_User.EmployeeID, SY_User.CostCenterID, SY_User.StoreHouseID, SY_User.StartupForm",
+      "TN1": "SY_UserGroup",
+      "TA1": "G",
+      "FKA1": "UserGroupID",
+      "FKB1": "UserGroupID",
+      "SE1": "G.UserGroupName",
+      "FTW": "COALESCE({BranchID}, '') = '' OR (SELECT COUNT(*) FROM CF_BranchTbl) <= 1 OR SY_User.BranchID = {BranchID}",
+      "SO": "SY_User.Disable, SY_User.UserName"
+    }
+  }
+}

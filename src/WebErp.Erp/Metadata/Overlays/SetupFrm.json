@@ -1,0 +1,102 @@
+// Thiết lập thông số hệ thống. Nguồn: Sys/SetupFrm.cs:2596-2712 (đọc), resx Layout1..5 (cột).
+// Gần đúng: tham số SY_Setup thành một lưới gom theo nhóm; các lưới khác là tab độc lập (IND).
+// Giá trị liên kết DB / máy chủ (LinkDatabase, LinkServer*) và mọi tham số kiểu mật khẩu/khóa: BE không trả giá trị.
+// Web không chạy ~27 INSERT SY_Setup mặc định lúc mở form.
+{
+  "form": "SetupFrm",
+  "formType": "LIST",
+  "caption": "Thiết lập thông số hệ thống",
+  "useDbConfig": false,
+  "cfg": {
+    "SPA2": "1",
+    "WACT": "Lưu;Không lưu",
+    "T0": {
+      "TN": "SY_Setup",
+      "PK": "CodeID",
+      "SE": "SY_Setup.CodeID, SY_Setup.CodeName, CASE WHEN SY_Setup.CodeID LIKE 'Link%' OR SY_Setup.CodeID LIKE '%pass%' OR SY_Setup.CodeID LIKE '%pwd%' OR SY_Setup.CodeID LIKE '%token%' OR SY_Setup.CodeID LIKE '%key%' OR SY_Setup.CodeID LIKE '%secret%' OR SY_Setup.CodeID LIKE '%conn%' THEN N'(ẩn)' ELSE SY_Setup.CodeValue END AS CodeValue, CASE WHEN SY_Setup.CodeID LIKE 'Link%' OR SY_Setup.CodeID LIKE '%pass%' OR SY_Setup.CodeID LIKE '%pwd%' OR SY_Setup.CodeID LIKE '%token%' OR SY_Setup.CodeID LIKE '%key%' OR SY_Setup.CodeID LIKE '%secret%' OR SY_Setup.CodeID LIKE '%conn%' THEN N'(ẩn)' ELSE SY_Setup.CodeValue2 END AS CodeValue2, SY_Setup.GroupID, SY_Setup.IndexID",
+      "SO": "SY_Setup.GroupID, SY_Setup.IndexID, SY_Setup.CodeID",
+      "GCA": "GroupID",
+      "HDE": "IndexID",
+      "GD2": "GroupID;CodeID;CodeName;CodeValue;CodeValue2"
+    },
+    "F0": {
+      "CodeID": "Mã",
+      "CodeName": "Tham số",
+      "CodeValue": "Giá trị",
+      "CodeValue2": "Giá trị (2)",
+      "GroupID": "Nhóm"
+    },
+    "T1": {
+      "IND": "1",
+      "TN": "SY_InitSetup",
+      "PK": "PeriodID",
+      "DCP": "Thông số hệ thống",
+      "EX": "CASE SY_InitSetup.CostMethod WHEN 'AVG' THEN N'Bình quân cuối kỳ' WHEN 'AVGS' THEN N'Bình quân cuối kỳ (theo kho)' WHEN 'AVGD' THEN N'Bình quân theo ngày' WHEN 'AVGDS' THEN N'Bình quân theo ngày (theo kho)' WHEN 'LOT' THEN N'Đích danh theo lô' WHEN 'FIFO' THEN N'Nhập trước xuất trước' ELSE SY_InitSetup.CostMethod END AS CostMethodName"
+    },
+    "F1": {
+      "BalancePeriodID": "Kỳ bắt đầu sử dụng chương trình",
+      "PeriodID": "Kỳ bắt đầu hạch toán tài chính",
+      "CostMethod": "Phương pháp tính giá xuất",
+      "CostMethodName": "Tên phương pháp tính giá"
+    },
+    "T2": {
+      "IND": "1",
+      "TN": "SY_StupAcTbl",
+      "PK": "SystemAccountType",
+      "DCP": "Tài khoản mặc định",
+      "GD2": "SystemAccountType;Description;AccountID;IsDebit;IsIncludeDetail"
+    },
+    "F2": {
+      "SystemAccountType": "STT",
+      "Description": "Mô tả",
+      "AccountID": "Tài khoản",
+      "IsDebit": "Bên nợ",
+      "IsIncludeDetail": "Chi tiết"
+    },
+    "T3": {
+      "IND": "1",
+      "TN": "SY_DocSetup",
+      "PK": "DocType",
+      "SO": "SY_DocSetup.STT",
+      "DCP": "Định dạng chứng từ",
+      "GD2": "DocType;DocName;PreFix;isAuto;AccountID",
+      "HDE": "DocGroupName"
+    },
+    "F3": {
+      "DocType": "Mã số",
+      "DocName": "Tên chứng từ",
+      "PreFix": "Ký tự đầu",
+      "isAuto": "Tăng tự động",
+      "AccountID": "Tài khoản chính"
+    },
+    "T4": {
+      "IND": "1",
+      "TN": "SY_FmatTbl",
+      "PK": "FormatID",
+      "DCP": "Định dạng số",
+      "GD2": "FormatID;FormatName;NumberDecimal;FormatString;MaskString;MinValue;MaxValue;MaxLength"
+    },
+    "F4": {
+      "FormatID": "Mã",
+      "FormatName": "Định dạng",
+      "NumberDecimal": "Số lẻ",
+      "FormatString": "Ký tự định dạng"
+    },
+    "T5": {
+      "IND": "1",
+      "TN": "SY_FmtFldTbl",
+      "PK": "AutoID",
+      "DCP": "Ngôn ngữ / Language",
+      "SO": "SY_FmtFldTbl.FieldName",
+      "HDE": "AutoID",
+      "GD2": "FieldName;FormatID;AlignX;CaptionVN;CaptionEN;CaptionCH"
+    },
+    "F5": {
+      "FieldName": "Tên trường",
+      "FormatID": "Mã định dạng",
+      "CaptionVN": "Tên tiếng việt",
+      "CaptionEN": "Tên tiếng anh",
+      "CaptionCH": "Tiếng hoa"
+    }
+  }
+}

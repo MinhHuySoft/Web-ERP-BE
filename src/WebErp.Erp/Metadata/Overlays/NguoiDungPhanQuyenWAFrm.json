@@ -1,0 +1,42 @@
+// Phân quyền sử dụng ( Web ): như NguoiDungPhanQuyenFrm nhưng tiền tố viết cứng WA (NguoiDungPhanQuyenWAFrm.cs:480).
+// Web không chạy ALTER/UPDATE WA_* và WA_Update_Permission lúc mở form (:743-757).
+{
+  "form": "NguoiDungPhanQuyenWAFrm",
+  "formType": "EDIT",
+  "caption": "Phân quyền sử dụng ( Web )",
+  "useDbConfig": false,
+  "cfg": {
+    "SPA2": "1",
+    "SPA3": "1",
+    "WACT": "Sửa / Phân quyền;Cập nhập quyền;Thêm sửa nhóm;Copy quyền từ nhóm khác",
+    "T0": {
+      "TN": "SY_UserGroup",
+      "PK": "UserGroupID",
+      "FTW": "COALESCE({BranchID}, '') = '' OR COALESCE(SY_UserGroup.BranchID, '') = '' OR SY_UserGroup.BranchID = {BranchID}",
+      "SO": "SY_UserGroup.UserGroupID",
+      "GD2": "UserGroupID;UserGroupName;BranchID"
+    },
+    "T1": {
+      "TN": "WA_UserGroupPermisstion",
+      "PK": "ID",
+      "MDL": "UserGroupID",
+      "TN1": "WA_Menu",
+      "TA1": "B",
+      "FKA1": "MenuID",
+      "FKB1": "MenuID",
+      "SE1": "B.VN AS DoiTuong",
+      "TN2": "WA_Menu",
+      "TA2": "C",
+      "TM2": "B",
+      "FKA2": "Parent",
+      "FKB2": "MenuID",
+      "SE2": "C.MenuID + ' - ' + C.VN AS GroupName",
+      "FTX": "COALESCE(B.isDisable, 0) = 0 AND COALESCE(B.isNotCheckPermission, 0) = 0",
+      "SO": "WA_UserGroupPermisstion.MenuID",
+      "DCP": "Phân quyền",
+      "GCA": "GroupName",
+      "HDE": "ID;UserGroupID;MenuID",
+      "GD2": "DoiTuong;IsRun;IsAdd;IsUpdate;IsDelete;isManager;isAdmin;isExportExcel;isLockDoc;isUnLockDoc;isAutoLock;isHideAmount"
+    }
+  }
+}

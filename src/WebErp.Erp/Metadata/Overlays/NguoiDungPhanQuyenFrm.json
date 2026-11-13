@@ -1,0 +1,43 @@
+// Phân quyền theo nhóm. Nguồn: Tools.SysForm/NguoiDungPhanQuyenFrm.cs:738-790 (SetData 763, lọc nhóm 768).
+// Gần đúng: WinForms chọn nhóm bằng combo và lọc theo cây menu; web: nhóm là danh sách, quyền là tab, gom theo nhóm menu (GCA).
+// Bảng theo module ({Mod}). Web không chạy {Mod}_Update_Permission / ALTER TABLE lúc mở form.
+{
+  "form": "NguoiDungPhanQuyenFrm",
+  "formType": "EDIT",
+  "caption": "Phân quyền sử dụng",
+  "useDbConfig": false,
+  "cfg": {
+    "SPA2": "1",
+    "SPA3": "1",
+    "WACT": "Sửa / Phân quyền;Cập nhập quyền;Thêm sửa nhóm;Copy quyền từ nhóm khác",
+    "T0": {
+      "TN": "SY_UserGroup",
+      "PK": "UserGroupID",
+      "FTW": "COALESCE({BranchID}, '') = '' OR COALESCE(SY_UserGroup.BranchID, '') = '' OR SY_UserGroup.BranchID = {BranchID}",
+      "SO": "SY_UserGroup.UserGroupID",
+      "GD2": "UserGroupID;UserGroupName;BranchID"
+    },
+    "T1": {
+      "TN": "{Mod}_UserGroupPermisstion",
+      "PK": "ID",
+      "MDL": "UserGroupID",
+      "TN1": "{Mod}_Menu",
+      "TA1": "B",
+      "FKA1": "MenuID",
+      "FKB1": "MenuID",
+      "SE1": "B.VN AS DoiTuong",
+      "TN2": "{Mod}_Menu",
+      "TA2": "C",
+      "TM2": "B",
+      "FKA2": "Parent",
+      "FKB2": "MenuID",
+      "SE2": "C.MenuID + ' - ' + C.VN AS GroupName",
+      "FTX": "COALESCE(B.isDisable, 0) = 0 AND COALESCE(B.isNotCheckPermission, 0) = 0",
+      "SO": "{Mod}_UserGroupPermisstion.MenuID",
+      "DCP": "Phân quyền",
+      "GCA": "GroupName",
+      "HDE": "ID;UserGroupID;MenuID",
+      "GD2": "DoiTuong;IsRun;IsAdd;IsUpdate;IsDelete;isManager;isAdmin;isExportExcel;isLockDoc;isUnLockDoc;isAutoLock;isHideAmount"
+    }
+  }
+}

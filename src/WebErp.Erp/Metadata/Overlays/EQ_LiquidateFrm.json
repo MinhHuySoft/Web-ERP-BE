@@ -1,0 +1,34 @@
+// Thanh lý / Hủy công cụ dụng cụ. Nguồn: ERP/EQ_LiquidateFrm.cs:486-543; không đọc SY_FrmCfg.
+// Lọc chi nhánh: WinForms không lọc ở form này; web vẫn lọc theo chi nhánh của người dùng (chờ chủ dự án chốt SPA3).
+{
+  "form": "EQ_LiquidateFrm",
+  "formType": "EDIT",
+  "caption": "Thanh lý / Hủy công cụ dụng cụ",
+  "useDbConfig": false,
+  "cfg": {
+    "SP": "9",
+    "DFP": "DocumentDate",
+    "T0": {
+      "TN": "EQ_LiquidateTbl",
+      "PK": "DocumentID",
+      "SO": "EQ_LiquidateTbl.DocumentDate, EQ_LiquidateTbl.DocumentID",
+      "SUM": "BaseTotal",
+      "ACP": "BaseTotal"
+    },
+    "T1": {
+      "TN": "EQ_LiquidateDetailTbl",
+      "PK": "UserAutoID",
+      "MDL": "DocumentID",
+      "DCP": "Chi tiết thanh lý",
+      "TN1": "EQ_EquipTbl",
+      "TA1": "A",
+      "FKA1": "EquipID",
+      "FKB1": "EquipID",
+      "SE1": "A.EquipName",
+      "SO": "EQ_LiquidateDetailTbl.UserAutoID",
+      "HDE": "DocumentID",
+      "SUM": "RemainAmount;LiquidateAmount",
+      "ACP": "RemainAmount;LiquidateAmount"
+    }
+  }
+}

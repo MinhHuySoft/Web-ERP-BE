@@ -23,6 +23,12 @@ public sealed record FormMeta(
 {
     public bool IsEdit => FormType.Equals("EDIT", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Kiểu web <c>DIALOG</c> (tệp mô tả form viết tay): hộp thoại thực hiện của WinForms (sao lưu, phục hồi, đổi mật khẩu, tính giá…).
+    /// Web chỉ đọc nên hiện thông tin (key <c>WNOTE</c>, lưới T0 nếu có) và các nút <c>WACT</c> ở trạng thái khóa.
+    /// </summary>
+    public bool IsDialog => FormType.Equals("DIALOG", StringComparison.OrdinalIgnoreCase);
+
     /// <summary>Cấu hình tra cứu / danh sách chọn (<c>SY_FrmDrdwTbl</c>, tài liệu 11 §2.1), dòng của tên form chạy đứng trước.</summary>
     public IReadOnlyList<DropdownMeta> Dropdowns { get; init; } = [];
 
@@ -94,7 +100,8 @@ public sealed record SlotMeta(
     /// <summary>Bảng/view đọc dữ liệu: TV nếu có, không thì TN.</summary>
     public string Source => string.IsNullOrEmpty(View) ? Table : View;
 
-    /// <summary>Mệnh đề FROM thay thế (form LIST không có T0: <c>SY_FrmLstTbl.TableDetailSelectFrom</c>).</summary>
+    /// <summary>Mệnh đề FROM thay thế (form LIST không có T0: <c>SY_FrmLstTbl.TableDetailSelectFrom</c>; key web <c>FRM</c> của tệp mô tả,
+    /// vd bảng dẫn xuất gộp nhóm đặt bí danh bằng TN).</summary>
     public string? FromOverride { get; init; }
 
     /// <summary>
@@ -111,6 +118,15 @@ public sealed record SlotMeta(
 
     /// <summary>Key web <c>GN</c>: tên lưới WinForms của slot (form viết tay đặt tên riêng, vd <c>grdHoaDon</c>), để khớp <c>SY_FrmDrdwTbl.GridName</c>.</summary>
     public string? GridName { get; init; }
+
+    /// <summary>
+    /// Key web <c>IND</c> = 1: tab chi tiết KHÔNG nối với chứng từ đang xem (form viết tay có các lưới độc lập trong tab, vd danh sách
+    /// quý / kỳ của khai báo lịch tài chính, lưới phụ của thiết lập kết nối).
+    /// </summary>
+    public bool Independent { get; init; }
+
+    /// <summary>Key <c>GCA</c> (TableInfoX.GroupColumnArr, "Nhóm theo các cột"): cột nhóm mặc định của lưới (<c>data-group-by</c>).</summary>
+    public string? GroupBy { get; init; }
 }
 
 /// <summary>

@@ -1,0 +1,20 @@
+// Khoá sổ / Mở sổ — phần xem: lưới kỳ theo năm. Nguồn: Sys/PeriodSetupFrm.cs:854-873, resx GridEXLayout5.
+// Không đọc SY_FrmCfg. Web không chạy UPDATE SY_Period và luồng nền sửa dữ liệu lúc mở form; các nút xử lý khóa.
+{
+  "form": "PeriodSetupFrm",
+  "formType": "LIST",
+  "caption": "Khoá sổ / Mở sổ",
+  "useDbConfig": false,
+  "cfg": {
+    "SP": "15",
+    "DFP": "YearID",
+    "SPA2": "1",
+    "WACT": "Mở sổ;Khóa sổ;Kiểm tra dữ liệu;Cập nhật lại sổ nhật ký chung, tồn kho;Kết chuyển theo Quí / Năm;Bảo trì dữ liệu",
+    "T0": {
+      "TN": "SY_Period",
+      "PK": "PeriodID",
+      "SO": "SY_Period.PeriodID",
+      "GD2": "PeriodID;PeriodName;FromDate;ToDate;isLock"
+    }
+  }
+}

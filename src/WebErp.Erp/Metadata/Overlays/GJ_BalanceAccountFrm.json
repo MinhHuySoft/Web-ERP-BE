@@ -1,0 +1,27 @@
+// Số dư tài khoản. Nguồn: ERP/GJ_BalanceAccountFrm.cs:306-340 (viết cứng :325; isBalance = 1 luôn áp). Đọc SY_FrmCfg.
+// WinForms không lọc người tạo ở form số dư (SPA2).
+// Lọc chi nhánh: WinForms không lọc ở form này; web vẫn lọc theo chi nhánh của người dùng (chờ chủ dự án chốt SPA3).
+{
+  "form": "GJ_BalanceAccountFrm",
+  "formType": "LIST",
+  "caption": "Số dư tài khoản",
+  "useDbConfig": true,
+  "cfg": {
+    "SPA2": "1",
+    "T0": {
+      "TN": "SY_BalanceAccountTbl",
+      "PK": "UserAutoID",
+      "TN1": "CF_ChartAccTbl",
+      "TA1": "A",
+      "FKA1": "AccountID",
+      "FKB1": "AccountID",
+      "SE1": "A.AccountName, A.isDetail",
+      "FTW": "SY_BalanceAccountTbl.IsBalance = 1",
+      "SO": "SY_BalanceAccountTbl.AccountID",
+      "HDE": "SourceDebit;SourceCredit;AmountDebit;AmountCredit",
+      "SUM": "SourceAmount;Amount;SourceDebit;SourceCredit;AmountDebit;AmountCredit",
+      "ACP": "SourceAmount;Amount;SourceDebit;SourceCredit;AmountDebit;AmountCredit",
+      "GD2": "AccountID;AccountName;SourceAmount;CurrencyID;RateExchange;Amount;CostCenterID;isDebit;PeriodID;IsBalance;BranchID"
+    }
+  }
+}
