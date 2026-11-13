@@ -196,6 +196,27 @@ Xem [deploy/README.md](../deploy/README.md). Tóm tắt:
     của `ConvertUnicode_Khongdau`.
 - Công cụ máy dev: `RealTenantSmokeTests.Run_read_only_checks` (`WEBERP_REAL_SQLFILE`: câu SELECT, kiểm chỉ đọc, giao dịch rollback).
 
+## M4 — vẽ layout form trên web (2026-11-13)
+
+Như Ctrl+F12 (`LayoutSettingFrm`) của WinForms. Thiết kế ở tài liệu FE `docs/kien-truc/07-ve-layout-form.md`, chuẩn 15.3.
+
+- **Nút "Vẽ layout"** (Ctrl+F12) trên chứng từ cho người có quyền Admin trên form.
+  - Màn `GET /erp/screens/{Form}/layout`, dữ liệu `…/layout/data` (JSON `erp-form-layout/1`), lưu / khôi phục `POST …/layout/save`.
+- **Ghi thẳng `SY_FrmCfg`** (FID = tên form chạy) nên WinForms và web cùng dùng. Khác WinForms ở chỗ an toàn hơn:
+  - một giao dịch + `sp_getapplock` theo FID, đọc `UPDLOCK`;
+  - dấu `revision`: bố cục bị đổi từ lúc mở thì trả 409, không ghi;
+  - chỉ ghi dòng LYT / LYS / T?V theo chênh lệch, giữ UserAutoID cũ;
+  - không xóa ghi lại mọi dòng của FID như WinForms, giữ dòng mồ côi.
+- **Migration `0003_form_layouts`**: `web.FormLayoutVersion` giữ ảnh trước / sau mỗi lần lưu (khôi phục đúng nguyên trạng).
+  - Chưa chạy migration thì chỉ xem.
+  - Đã chạy trên z4 MedData 2026-11-13.
+- **Kiểm**:
+  - unit `LayoutModelTests`;
+  - tích hợp `LayoutStoreTests` (SQL thật: chỉ dòng bố cục, xung đột, quyền, phiên bản, khôi phục y nguyên, xóa bộ đệm metadata);
+  - host `LayoutTests`, contract (validator FE 15.3);
+  - vòng lưu → khôi phục trên z4: `RealTenantSmokeTests.Layout_round_trip_on_test_copy`, phải đặt `WEBERP_REAL_ALLOW_WRITE=<DB>@<server>`.
+- **Chưa**: sửa thuộc tính LYS, đổi tên ô, chép bố cục form khác, chuyển cả tab, mặc định SQL, tiêu đề trang chi tiết (DCP), `SY_UserLog`.
+
 ## M6 — in theo mẫu: GĐ1 (2026-11-13)
 
 Đặc tả và bộ dựng ở FE: `docs/kien-truc/06-mau-in.md`, chuẩn ERP-HTML mục 15.1 (repo FE). BE chỉ gửi **mẫu** và **dữ liệu**,

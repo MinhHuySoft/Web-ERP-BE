@@ -190,6 +190,9 @@ public sealed class ErpMetadata(ErpConnectionFactory connections, TimeProvider t
             return (IReadOnlyDictionary<string, object?>)d;
         });
 
+    /// <summary>Bỏ bộ đệm metadata của một form (sau khi trình vẽ layout lưu cấu hình), để lần mở sau đọc lại DB.</summary>
+    public void Invalidate(Tenant tenant, string runtimeName) => _cache.TryRemove($"form:{tenant.Key}:{runtimeName}", out _);
+
     private async Task<T> Cached<T>(string key, Func<Task<T>> load)
     {
         var now = time.GetUtcNow();

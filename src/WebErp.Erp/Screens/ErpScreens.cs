@@ -133,7 +133,10 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
                 visible.Add(d);
             }
             var details = await DetailPagesAsync(ctx, form, slot, master, visible, c, tx, ct);
-            return new RecordView(ScreenStatus.Ok, form, key, slot.PrimaryKey, tabs, details);
+            return new RecordView(ScreenStatus.Ok, form, key, slot.PrimaryKey, tabs, details)
+            {
+                CanDesignLayout = ctx.Perm.Admin && FormOverlays.Get(req.FormName, req.Para) is not { UseDbConfig: false },
+            };
         }, e => new RecordView(ScreenStatus.ConfigError, form, key, Note: e), ct);
     }
 

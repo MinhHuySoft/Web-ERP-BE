@@ -42,6 +42,7 @@ public static partial class ScreenEndpoints
         g.MapGet("/screens/{formName}/lookups/{field}", LookupAsync);
         g.MapGet("/reports/{formName}", ReportAsync);
         MapPrint(g);
+        MapLayout(g);
     }
 
     /// <summary>Báo cáo (M6): chưa có, trả màn "chưa có trên web".</summary>
@@ -81,6 +82,8 @@ public static partial class ScreenEndpoints
             var p = urls.Para;
             urls = urls with { Print = k => u.Print(f, p, k) };
         }
+        // Nút Vẽ layout (Ctrl+F12 của WinForms, chế độ quản trị): người có quyền Admin trên form.
+        if (v.CanDesignLayout) urls = urls with { Layout = ErpUrls.Of(ctx).Layout(o.Node!.Entry.FormName!, urls.Para) };
         return HtmlResults.Page(MetaScreens.Record(v, o.Node!.Entry.Caption, o.Node.Entry.MenuId, urls, tokens.FormFieldName, tokens.RequestToken!));
     }
 

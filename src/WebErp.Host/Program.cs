@@ -44,6 +44,8 @@ builder.Services.AddSingleton<ErpMetadata>();
 builder.Services.AddSingleton<ErpPermissions>();
 builder.Services.AddSingleton<IErpScreens, ErpScreens>();
 builder.Services.AddSingleton<WebErp.Core.Print.IErpPrint, WebErp.Erp.Print.ErpPrint>();
+// Vẽ layout form (M4): ghi SY_FrmCfg như LayoutSettingFrm của WinForms, sao lưu trong schema web.
+builder.Services.AddSingleton<WebErp.Core.Layout.IErpLayout, WebErp.Erp.Layout.ErpLayout>();
 builder.Services.AddSingleton<MenuService>();
 
 builder.Services.AddWebErpAuth(options);
