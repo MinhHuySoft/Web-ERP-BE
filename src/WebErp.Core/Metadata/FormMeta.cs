@@ -9,7 +9,8 @@ namespace WebErp.Core.Metadata;
 /// <param name="FormType"><c>LIST</c>, <c>LISTEDIT</c>, <c>LISTEDIT2</c>, <c>EDIT</c>… (rỗng ⇒ <c>LIST</c>).</param>
 /// <param name="Settings">Key cấp form (SubID rỗng): <c>SP</c>, <c>SPA</c>, <c>SPA2</c>, <c>SPA3</c>, <c>DFP</c>, <c>T1V</c>, <c>TPV1</c>…</param>
 /// <param name="Captions">Đè tiêu đề cột theo form: khóa <c>F0:Cột</c> (T0) / <c>F1:Cột</c> (T1)…, từ <c>SY_FrmCfg</c> KeyID F0..F9, SubValue CV;
-/// khóa <c>C:Cột</c> = nhãn ô chứng từ của form (<c>SY_FrmCtrTbl</c>, ParentCtlName …;Fld&lt;Cột&gt;).</param>
+/// khóa <c>C:Cột</c> = nhãn ô chứng từ của form (<c>SY_FrmCtrTbl</c>, ParentCtlName …;Fld&lt;Cột&gt;);
+/// khóa <c>G:Lưới;Cột</c> = tiêu đề cột lưới đặt ở màn "Ngôn ngữ form" (<c>SY_FrmCtrTbl</c> CtlName G).</param>
 public sealed record FormMeta(
     string FormName,
     string RuntimeName,

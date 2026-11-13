@@ -41,7 +41,7 @@ public static class MetadataCompiler
                 if (!slotKeys.TryGetValue(r.KeyID, out var d)) slotKeys[r.KeyID] = d = new(StringComparer.OrdinalIgnoreCase);
                 d.TryAdd(sub, value);
             }
-            else if ((r.KeyID.Length == 2 && r.KeyID[0] is 'F' or 'f' && char.IsAsciiDigit(r.KeyID[1]) || r.KeyID == "C")
+            else if ((r.KeyID.Length == 2 && r.KeyID[0] is 'F' or 'f' && char.IsAsciiDigit(r.KeyID[1]) || r.KeyID is "C" or "G")
                      && string.Equals(r.SubValue, "CV", StringComparison.OrdinalIgnoreCase))
             {
                 captions.TryAdd($"{r.KeyID.ToUpperInvariant()}:{sub}", value);

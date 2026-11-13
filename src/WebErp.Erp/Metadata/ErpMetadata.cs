@@ -70,12 +70,17 @@ public sealed class ErpMetadata(ErpConnectionFactory connections, TimeProvider t
             var ctr = new List<FrmCfgRow>();
             if (await c.ExecuteScalarAsync<int>(new CommandDefinition("SELECT CASE WHEN OBJECT_ID('dbo.SY_FrmCtrTbl') IS NULL THEN 0 ELSE 1 END", cancellationToken: ct)) == 1)
             {
-                foreach (var (path, caption) in await c.QueryAsync<(string, string)>(Cmd(
-                             "SELECT ParentCtlName, CaptionVN FROM dbo.SY_FrmCtrTbl WHERE FormID IN (@f, @g) AND CtlName = 'C' " +
+                // CtlName "C": nhãn ô (…;Fld<Cột>); "G": tiêu đề cột lưới (<Lưới>;<Cột>), vd grdListDoc;PurposeID = "Mục đích".
+                foreach (var (kind, path, caption) in await c.QueryAsync<(string, string, string)>(Cmd(
+                             "SELECT CtlName, ParentCtlName, CaptionVN FROM dbo.SY_FrmCtrTbl WHERE FormID IN (@f, @g) AND CtlName IN ('C', 'G') " +
                              "AND COALESCE(IsDisable,0) = 0 AND COALESCE(CaptionVN,'') <> '' ORDER BY CASE WHEN FormID = @f THEN 0 ELSE 1 END", runtimeName, ct, formName)))
                 {
-                    var last = path?.Split(';').LastOrDefault()?.Trim() ?? "";
-                    if (last.StartsWith("Fld", StringComparison.OrdinalIgnoreCase) && last.Length > 3) ctr.Add(new FrmCfgRow("C", last[3..], caption.Trim(), "CV"));
+                    var parts = (path ?? "").Split(';', StringSplitOptions.TrimEntries);
+                    var last = parts[^1];
+                    if (kind == "C" && last.StartsWith("Fld", StringComparison.OrdinalIgnoreCase) && last.Length > 3)
+                        ctr.Add(new FrmCfgRow("C", last[3..], caption.Trim(), "CV"));
+                    else if (kind == "G" && parts.Length >= 2 && last.Length > 0)
+                        ctr.Add(new FrmCfgRow("G", $"{parts[^2]};{last}", caption.Trim(), "CV"));
                 }
             }
             var flt = (await c.QueryAsync<FrmFltRow>(Cmd(
