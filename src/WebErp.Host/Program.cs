@@ -43,6 +43,7 @@ builder.Services.AddSingleton<IErpMenu, ErpMenu>();
 builder.Services.AddSingleton<ErpMetadata>();
 builder.Services.AddSingleton<ErpPermissions>();
 builder.Services.AddSingleton<IErpScreens, ErpScreens>();
+builder.Services.AddSingleton<WebErp.Core.Print.IErpPrint, WebErp.Erp.Print.ErpPrint>();
 builder.Services.AddSingleton<MenuService>();
 
 builder.Services.AddWebErpAuth(options);

@@ -35,6 +35,16 @@ public sealed class ErpUrls(string pathBase) : IMenuUrls
         + (string.IsNullOrEmpty(para) ? "" : "&para=" + Uri.EscapeDataString(para))
         + string.Concat(paras.Select((p, i) => $"&p{i}={Uri.EscapeDataString(p)}"));
 
+    /// <summary>Màn in theo mẫu (M6) của các chứng từ (nối bằng <c>;</c>), mẫu tùy chọn.</summary>
+    public string Print(string formName, string? para, string documentIds, string? template = null) =>
+        $"{pathBase}/erp/screens/{Uri.EscapeDataString(formName)}/print?DocumentID={Uri.EscapeDataString(documentIds)}"
+        + (string.IsNullOrEmpty(template) ? "" : "&Template=" + Uri.EscapeDataString(template))
+        + (string.IsNullOrEmpty(para) ? "" : "&para=" + Uri.EscapeDataString(para));
+
+    /// <summary>Tệp mẫu in (<c>data-template-src</c>): <c>.rpx</c> mới nhất của <c>SY_RpFTbl</c> / thư mục Reports.</summary>
+    public string PrintTemplate(string formName, string? para, string template) =>
+        $"{pathBase}/erp/screens/{Uri.EscapeDataString(formName)}/print/templates/{Uri.EscapeDataString(template)}.rpx" + ParaQuery(para);
+
     private static string ParaQuery(string? para) => string.IsNullOrEmpty(para) ? "" : "?para=" + Uri.EscapeDataString(para);
 
     private string Screen(string kind, string formName, string? para) =>

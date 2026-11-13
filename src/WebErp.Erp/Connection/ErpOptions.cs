@@ -8,4 +8,10 @@ public sealed class ErpOptions
 
     /// <summary>Timeout mở kết nối, dùng khi chuỗi kết nối không tự đặt.</summary>
     public int ConnectTimeoutSeconds { get; set; } = 15;
+
+    /// <summary>
+    /// Thư mục gốc chứa mẫu in <c>.rpx</c> của các công ty (mỗi công ty một thư mục con theo mã công ty), dùng khi mẫu không có trong
+    /// <c>SY_RpFTbl</c> (WinForms đọc thư mục <c>Reports</c> trên máy). Để trống = chỉ đọc mẫu trong DB.
+    /// </summary>
+    public string? ReportsRoot { get; set; }
 }
