@@ -88,7 +88,10 @@ public sealed record ViewField(string Field, string Caption, string Control, obj
 
 public sealed record ViewTab(string Id, string Title, IReadOnlyList<ViewField> Fields);
 
-public sealed record ViewDetailTab(string Id, string Title);
+/// <summary>Một trang chi tiết của chứng từ.</summary>
+/// <param name="Fields">Ô của chứng từ đặt trên trang này (<c>LYT5…LYT13</c>), hiện trước lưới; null = không có.</param>
+/// <param name="Lazy">Có lưới nạp lười (<c>data-src</c>). <c>false</c> = trang chỉ có ô (vd "Công nợ &amp; Giảm giá / CK" của hóa đơn bán).</param>
+public sealed record ViewDetailTab(string Id, string Title, IReadOnlyList<ViewField>? Fields = null, bool Lazy = true);
 
 /// <summary>Kết quả xem một chứng từ (EDIT, <c>data-mode=view</c>).</summary>
 public sealed record RecordView(

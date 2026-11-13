@@ -301,6 +301,8 @@ public sealed class RealTenantSmokeTests(FrontendValidator validator) : IClassFi
             }
             foreach (var d in rec.Details ?? [])
             {
+                // Trang chỉ có ô của chứng từ (vd L6 của hóa đơn bán): nằm sẵn trong HTML chứng từ, không nạp lười.
+                if (!d.Lazy) { report.Add($"    {d.Id} {d.Title}: {d.Fields?.Count} ô (trong chứng từ)"); continue; }
                 var det = await screens.OpenDetailAsync(req, key, d.Id, CancellationToken.None);
                 report.Add($"    {d.Id} {d.Title}: {det.Status} {det.Note} rows={det.Rows?.Count}");
                 if (det.Status != ScreenStatus.Ok) continue;

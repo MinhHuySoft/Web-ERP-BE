@@ -49,6 +49,42 @@ public sealed class MetadataCompilerTests
     }
 
     [Fact]
+    public void Compiles_detail_page_layout_and_button_captions()
+    {
+        // Giống hóa đơn bán (AR_InvoiceFrm) của MedData: LYT6 là ô của trang chi tiết 2; nút user control lấy chữ ở LYT[7], LYS BT, rồi mặc định.
+        FrmCfgRow[] cfg =
+        [
+            new("T0", "TN", "AR_InvoiceTbl", null), new("T0", "PK", "DocumentID", null),
+            new("LYT1", "DocumentID", "1;4;1;1;;;;;;;;;;;;;;;;0;0", "001"),
+            new("LYT1", "StatusButtonCtl_1", "22;3;1;;;;;Chuyển trạng thái;;;;;;;;SELECT 1;;;;", "003"),
+            new("LYT1", "CommandButtonCtl_2", "22;4;1;;;;;;;;;;;;;;;;;0;0", "006"),
+            new("LYT1", "ViettelPostCtl", "22;4;1;;;;;;;;;;;;;;;;;0;0", "020"),
+            new("LYT1", "GridDetailCtl", "22;99;99;;;;;;;;;;;;;;;;;0;0", "021"),
+            new("LYT1", "CommandButtonCtl_3", "22;4;1;;;;;;;;;;;;;;;;;0;0", "022"),
+            new("LYT1", "UserControl462", "26;4;1;;;;;Tính khuyến mãi;;;;;;;2;;;", "023"),
+            new("LYS1", "CommandButtonCtl_2", "Xem thông tin hợp đồng", "BT"),
+            new("LYS1", "CommandButtonCtl_2", "AR_Invoice_XemHopDongStp N'{0}'", "C4"),
+            new("LYT6", "PaymentTermID", "2;4;1;1;;110;;;;;;;;;;;;;;0;0", "002"),
+            new("LYT6", "PaymentTypeID", "2;4;1;1;;110;;;;;;;;;;;;;;0;0", "001"),
+            new("LYT14", "Bogus", "1;4;1;1;;;;;;;;;;;;;;;;0;0", "001"),
+        ];
+        var f = MetadataCompiler.Compile("AR_InvoiceFrm", "AR_InvoiceFrm", null, cfg, []);
+
+        // LYT14 không phải tab của engine; LYT6 → trang chi tiết 2.
+        Assert.Equal(["DocumentID", "StatusButtonCtl_1", "CommandButtonCtl_2", "ViettelPostCtl", "GridDetailCtl", "CommandButtonCtl_3",
+            "UserControl462", "PaymentTypeID", "PaymentTermID"], f.Layout.Select(l => l.Field));
+        Assert.Equal([0, 0, 0, 0, 0, 0, 0, 2, 2], f.Layout.Select(l => l.DetailPage));
+        string? Btn(string name) => f.Layout.Single(l => l.Field == name).ButtonText;
+        Assert.Equal("Chuyển trạng thái", Btn("StatusButtonCtl_1"));
+        Assert.Equal("Xem thông tin hợp đồng", Btn("CommandButtonCtl_2"));
+        Assert.Equal("VIETEL POST", Btn("ViettelPostCtl"));
+        Assert.Null(Btn("GridDetailCtl"));        // lưới con: không phải nút
+        Assert.Null(Btn("CommandButtonCtl_3"));   // không có chữ nào: web bỏ qua
+        Assert.Equal("Tính khuyến mãi", Btn("UserControl462"));
+        Assert.Null(Btn("DocumentID"));
+    }
+
+    [Fact]
     public void List_form_without_T0_falls_back_to_SY_FrmLstTbl()
     {
         var lst = new FrmLstRow("CF_BranchListFrm", "LIST", "Chi nhánh", "CF_BranchTbl", "BranchID", "isDisable = 0", "Notes", "Budget", null, null);

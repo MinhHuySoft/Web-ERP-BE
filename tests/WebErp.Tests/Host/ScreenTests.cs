@@ -38,6 +38,15 @@ public sealed class ScreenTests(HostFixture f)
         Assert.Contains($"data-src=\"{Base}/PO%2F001/tabs/T1\"", rec);
         Assert.Contains($"data-lookup-src=\"{Base}/lookups/ObjectID?q={{q}}&amp;p0=HN\"", rec);
         Assert.Contains("<output data-erp=\"lookup-text\" for=", rec);
+        // Nút trên form: hiện như ERP nhưng khóa, không gửi form.
+        Assert.Contains("<div data-erp=\"field\" data-control=\"button\" data-span=\"3\"><span></span><button type=\"button\" "
+            + "id=\"rec-AP-PurposeRequestListFrm-StatusButtonCtl_1\" disabled title=\"Chưa dùng được trên bản web (chờ chức năng ghi dữ liệu)\">Chuyển trạng thái</button></div>", rec);
+        // Trang chi tiết: ô của chứng từ đứng trước lưới nạp lười, gắn form chứng từ; trang chỉ có ô thì không có data-src.
+        Assert.Matches($"data-tab-id=\"T1\" data-title=\"Hàng hóa đề nghị\" data-src=\"{Base}/PO%2F001/tabs/T1\">\\s*<fieldset>\\s*<div data-erp=\"field\"", rec);
+        Assert.Contains("name=\"PaymentTermID\" form=\"rec-AP-PurposeRequestListFrm\" readonly value=\"30N\"", rec);
+        Assert.Contains("data-tab-id=\"L6\" data-title=\"Công nợ &amp; Giảm giá / CK\">", rec);
+        Assert.DoesNotContain("/tabs/L6", rec);
+        Assert.Contains("name=\"DueDate\" form=\"rec-AP-PurposeRequestListFrm\" readonly type=\"date\" value=\"2026-12-09\"", rec);
 
         var lk = await Get(c, $"{Base}/lookups/ObjectID?q=c%C3%B4ng&p0=HN");
         Assert.Contains("data-erp=\"lookup-result\" data-total=\"7\"", lk);

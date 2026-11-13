@@ -65,9 +65,21 @@ public static class MetaScreens
             // Chế độ xem: mọi ô readonly / disabled (chuẩn 9). Web chưa ghi (M4) nên action là chính URL chứng từ.
             RecordRenderer.Write(w, new RecordModel(recordId, urls.Record(key), antiforgeryField, antiforgeryToken,
                 (v.Tabs ?? []).Select(t => new FieldsetModel(t.Title, t.Fields.Select(f => ViewField(f, urls)).ToList(), t.Id)).ToList(), v.KeyField, key));
-            TabsRenderer.Write(w, (v.Details ?? []).Select(d => new TabPanelModel(d.Id, d.Title, urls.Detail(key, d.Id))).ToList());
+            // Trang chi tiết (chuẩn 12): ô của chứng từ trên trang (LYT5…13) đứng trước lưới nạp lười; trang chỉ có ô thì không có data-src.
+            TabsRenderer.Write(w, (v.Details ?? []).Select(d => new TabPanelModel(d.Id, d.Title, d.Lazy ? urls.Detail(key, d.Id) : null,
+                Content: d.Fields is { Count: > 0 } fields ? pw => PageFields(pw, recordId, fields, urls) : null)).ToList());
         });
     }
+
+    /// <summary>Ô của chứng từ trên một trang chi tiết: nhóm <c>fieldset</c> (không data-erp), control gắn form chứng từ qua thuộc tính form.</summary>
+    private static void PageFields(HtmlWriter w, string recordId, IReadOnlyList<ViewField> fields, ScreenUrls urls)
+    {
+        w.Open("fieldset").Line();
+        foreach (var f in fields) FieldRenderer.Write(w, recordId, ViewField(f, urls), external: true);
+        w.Close("fieldset").Line();
+    }
+
+    private const string ButtonPending = "Chưa dùng được trên bản web (chờ chức năng ghi dữ liệu)";
 
     /// <summary>Nội dung một tab chi tiết nạp lười: chỉ có lưới.</summary>
     public static string Detail(DetailView v, string title) =>
@@ -162,6 +174,7 @@ public static class MetaScreens
                 f.Value is null ? null : Convert.ToDecimal(f.Value, CultureInfo.InvariantCulture).ToString("0.############", CultureInfo.InvariantCulture),
                 span, ReadOnly: true, RowStart: f.RowStart, Decimals: f.Decimals),
             "label" => new FieldModel(f.Field, f.Caption, "label", Display: Text(f.Value), Span: span, RowStart: f.RowStart),
+            "button" => new FieldModel(f.Field, f.Caption, "button", Span: span, RowStart: f.RowStart, Title: ButtonPending),
             "textarea" => new FieldModel(f.Field, f.Caption, "textarea", Text(f.Value), span, ReadOnly: true, Rows: Math.Max(f.Rows, 2), RowStart: f.RowStart),
             _ => new FieldModel(f.Field, f.Caption, "text", Text(f.Value), span, ReadOnly: true, RowStart: f.RowStart),
         };
