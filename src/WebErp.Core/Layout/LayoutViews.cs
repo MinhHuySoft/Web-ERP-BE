@@ -23,4 +23,7 @@ public interface IErpLayout
 
     /// <summary>Ghi lại ảnh "trước" của phiên bản <paramref name="versionNo"/> vào cấu hình form (cũng thành một phiên bản mới).</summary>
     Task<LayoutSaveResult> RestoreAsync(ScreenRequest request, int versionNo, string? comment, CancellationToken ct);
+
+    /// <summary>Nguồn chép bố cục: danh sách form có bố cục (<paramref name="fid"/> rỗng) hoặc bố cục của một form (JSON). null = không có quyền.</summary>
+    Task<string?> SourceAsync(ScreenRequest request, string? fid, CancellationToken ct);
 }

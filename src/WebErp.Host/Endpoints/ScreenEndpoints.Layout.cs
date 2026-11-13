@@ -24,6 +24,7 @@ public static partial class ScreenEndpoints
     {
         g.MapGet("/screens/{formName}/layout", LayoutDesignerAsync);
         g.MapGet("/screens/{formName}/layout/data", LayoutDataAsync);
+        g.MapGet("/screens/{formName}/layout/source", LayoutSourceAsync);
         g.MapPost("/screens/{formName}/layout/save", LayoutSaveAsync).DisableAntiforgery();
     }
 
@@ -40,7 +41,8 @@ public static partial class ScreenEndpoints
         var u = ErpUrls.Of(ctx);
         var tokens = af.GetAndStoreTokens(ctx);
         return HtmlResults.Page(LayoutScreens.Designer(v, f, req.RuntimeName, o.Node.Entry.MenuId,
-            new LayoutDesignerUrls(u.Layout(f, p), p, u.LayoutData(f, p), v.CanSave ? u.LayoutSave(f) : null), tokens.FormFieldName, tokens.RequestToken!));
+            new LayoutDesignerUrls(u.Layout(f, p), p, u.LayoutData(f, p), v.CanSave ? u.LayoutSave(f) : null, v.CanSave ? u.LayoutSource(f, p) : null),
+            tokens.FormFieldName, tokens.RequestToken!));
     }
 
     private static async Task<IResult> LayoutDataAsync(HttpContext ctx, string formName, string? para, MenuService menu, TimeProvider time, IErpLayout layout)
@@ -51,6 +53,19 @@ public static partial class ScreenEndpoints
         if (v.Status != ScreenStatus.Ok || v.Json is null) return LayoutFallback(ctx, v, o.Node!);
         ctx.Response.Headers.CacheControl = "private, no-store";
         return Results.Content(v.Json, "application/json; charset=utf-8");
+    }
+
+    /// <summary>Nguồn chép bố cục (JSON): <c>?fid=</c> rỗng = danh sách form có bố cục; có = bố cục của form đó. Chỉ người được vẽ form này.</summary>
+    private static async Task<IResult> LayoutSourceAsync(HttpContext ctx, string formName, string? para, string? fid, MenuService menu, TimeProvider time,
+        IErpLayout layout)
+    {
+        var o = await OpenAsync(ctx, formName, para, menu, time);
+        if (o.Stop is not null) return o.Stop;
+        if (!string.IsNullOrEmpty(fid) && !System.Text.RegularExpressions.Regex.IsMatch(fid, "^[A-Za-z0-9_]{1,250}$")) return NotFound();
+        var json = await layout.SourceAsync(Request(ctx, o.Node!, new Dictionary<string, string>()), fid, ctx.RequestAborted);
+        if (json is null) return HtmlResults.Error(StatusCodes.Status403Forbidden, "Không có quyền", ErpMessage.Error("Chỉ người có quyền Admin trên form mới chép bố cục."));
+        ctx.Response.Headers.CacheControl = "private, no-store";
+        return Results.Content(json, "application/json; charset=utf-8");
     }
 
     private static async Task<IResult> LayoutSaveAsync(HttpContext ctx, string formName, MenuService menu, TimeProvider time, IErpLayout layout, IAntiforgery af)

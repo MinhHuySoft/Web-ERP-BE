@@ -33,7 +33,11 @@ public sealed class LayoutTests(HostFixture f)
         var html = await Get(c, $"{Base}/layout");
         Assert.Contains("data-screen-key=\"layout:AP_PurposeRequestListFrm\"", html);
         Assert.Contains("data-mode=\"edit\"", html);
-        Assert.Contains($"<section data-erp=\"layout-designer\" data-form=\"AP_PurposeRequestListFrm\" data-layout-src=\"{Base}/layout/data\">", html);
+        Assert.Contains($"<section data-erp=\"layout-designer\" data-form=\"AP_PurposeRequestListFrm\" data-layout-src=\"{Base}/layout/data\" "
+            + $"data-source-src=\"{Base}/layout/source?fid={{fid}}\">", html);
+        Assert.Contains("\"fid\":\"CF_ItemListFrm\"", await Get(c, $"{Base}/layout/source?fid="));
+        Assert.Contains("\"name\":\"ItemID\"", await Get(c, $"{Base}/layout/source?fid=CF_ItemListFrm"));
+        await Get(c, $"{Base}/layout/source?fid=x%27%3Bdrop", HttpStatusCode.NotFound);
         Assert.Contains($"<form method=\"post\" action=\"{Base}/layout/save\">", html);
         Assert.Contains("<input type=\"hidden\" name=\"Form\" value=\"AP_PurposeRequestListFrm\">", html);
         var token = Regex.Match(html, "name=\"__RequestVerificationToken\" value=\"([^\"]+)\"").Groups[1].Value;
@@ -88,7 +92,9 @@ public sealed class LayoutTests(HostFixture f)
             var html = await Get(c, $"{Base}/layout");
             Assert.Contains("data-mode=\"view\"", html);
             Assert.DoesNotContain("<form method=\"post\"", html);
+            Assert.DoesNotContain("data-source-src", html);
             Assert.Contains("quyền Admin trên form", html);
+            await Get(c, $"{Base}/layout/source?fid=", HttpStatusCode.Forbidden);
         }
         finally { f.Erp.CannotDesign.Clear(); }
     }

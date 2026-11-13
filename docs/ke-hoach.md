@@ -215,7 +215,22 @@ Như Ctrl+F12 (`LayoutSettingFrm`) của WinForms. Thiết kế ở tài liệu 
   - tích hợp `LayoutStoreTests` (SQL thật: chỉ dòng bố cục, xung đột, quyền, phiên bản, khôi phục y nguyên, xóa bộ đệm metadata);
   - host `LayoutTests`, contract (validator FE 15.3);
   - vòng lưu → khôi phục trên z4: `RealTenantSmokeTests.Layout_round_trip_on_test_copy`, phải đặt `WEBERP_REAL_ALLOW_WRITE=<DB>@<server>`.
-- **Chưa**: sửa thuộc tính LYS, đổi tên ô, chép bố cục form khác, chuyển cả tab, mặc định SQL, tiêu đề trang chi tiết (DCP), `SY_UserLog`.
+- **GĐ2 (2026-11-13)**:
+  - Sửa thuộc tính `LYS` theo danh sách mã cho phép từng loại control (`LayoutModel.EditableProps`). Mã có SQL / lệnh giữ nguyên;
+    gửi khác thì 422.
+  - Chặn lách:
+    - một mã chỉ sửa được khi được phép ở cả loại control cũ lẫn mới;
+    - không đổi loại control khi ô còn mã không được phép ở loại mới;
+    - không đổi tên user control sang lớp khác khi ô có thuộc tính.
+  - Đổi tên ô qua `from`: giữ UserAutoID và LYS.
+  - Tiêu đề / quyền xem trang chi tiết (`T{n}`/`DCP`, `TPV1–5`).
+  - Nguồn chép bố cục `GET …/layout/source?fid=`.
+  - Ảnh phiên bản bản 2 (`{"v":2,"rows":[…]}`) có cả dòng DCP / TPV. Ảnh bản 1 khôi phục đúng phạm vi cũ.
+  - Vòng lưu → khôi phục trên z4 đạt cho `AP_PurposeRequestListFrm` và `AR_InvoiceFrm` (có thuộc tính SQL, giữ nguyên).
+- **Không làm trên web**:
+  - thêm cột vào bảng (QĐ-01);
+  - nhập SQL / lệnh (mặc định SQL, LBS, VLQ, mã lệnh user control), sửa trên ERP;
+  - `SY_UserLog`: WinForms cũng không ghi; web có `web.FormLayoutVersion`.
 
 ## M6 — in theo mẫu: GĐ1 (2026-11-13)
 

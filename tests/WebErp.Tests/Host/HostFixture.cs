@@ -120,6 +120,11 @@ public sealed class FakeErp : IErpUsers, IErpMenu, IErpScreens, IErpPrint, IErpL
         return Task.FromResult(new LayoutSaveResult(true, 3, Changed: 2));
     }
 
+    public Task<string?> SourceAsync(ScreenRequest request, string? fid, CancellationToken ct) =>
+        Task.FromResult(CannotDesign.Contains(request.UserName) ? null
+            : string.IsNullOrEmpty(fid) ? """{"forms":[{"fid":"CF_ItemListFrm","items":12,"caption":"Hàng hóa"}]}"""
+            : $$$"""{"form":"{{{fid}}}","captions":{},"items":[{"tab":"1","group":"","name":"ItemID","cfg":"1;4;1","props":{}}]}""");
+
     public Task<DetailView> OpenDetailAsync(ScreenRequest request, string key, string slotId, CancellationToken ct) =>
         Task.FromResult(slotId == "T1" ? SampleScreens.Detail() : new DetailView(ScreenStatus.NotFound));
 
