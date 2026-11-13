@@ -157,3 +157,31 @@ INSERT dbo.AP_PurchaseRequestTbl (PurchaseRequestID,PurchaseDate,StatusID,Branch
  ('PO/004',DATEADD(day,-1,CAST(GETDATE() AS date)),1,'HN',N'Của người khác',4000,1,0,'khac');
 INSERT dbo.AP_PurchaseRequestDetailTbl VALUES ('d1','PO/001','VT01',2,100),('d2','PO/001','VT02',3.5,200),('d3','PO/004','VT01',1,100);
 INSERT dbo.WEB_Canary VALUES (1);
+GO
+-- In theo mẫu (M6): danh sách mẫu + người ký, kho .rpx của WinForms (bản cũ và bản mới), tham số hệ thống, quyền sửa mẫu (EPER),
+-- SP báo cáo cố tình ghi WEB_Canary để kiểm giao dịch đọc luôn rollback, và trả một cột dạng mật khẩu (không được gửi FE).
+CREATE TABLE dbo.SY_RpDTbl (RpName varchar(200) NOT NULL, PName varchar(100) NOT NULL, DefaultValueVN nvarchar(max) NULL, Caption nvarchar(200) NULL);
+CREATE TABLE dbo.SY_RpFTbl (UserAutoID varchar(50) NOT NULL PRIMARY KEY, FileName nvarchar(500) NULL, FileDate datetime NULL, Title nvarchar(300) NULL,
+  Notes nvarchar(300) NULL, FileContent image NULL);
+CREATE TABLE dbo.SY_Setup (CodeID varchar(100) NOT NULL PRIMARY KEY, CodeValue nvarchar(4000) NULL);
+INSERT dbo.SY_RpDTbl (RpName,PName,DefaultValueVN,Caption) VALUES
+ ('AP_PurposeRequestListReport','Template',N'AP_PurposeRequestListReport;In đề xuất mua hàng;AP_PRCopyReport;Bản sao',NULL),
+ ('AP_PurposeRequestListReport','UInput1',NULL,N'Người lập');
+INSERT dbo.SY_RpFTbl (UserAutoID,FileName,FileDate,FileContent) VALUES
+ ('r1','AP_PurposeRequestListReport.rpx','2025-01-01',CAST('<ActiveReportsLayout Version="3.1"><Sections/></ActiveReportsLayout>' AS varbinary(max))),
+ ('r2','AP_PurposeRequestListReport.rpx','2026-01-01',CAST('<ActiveReportsLayout Version="3.1"><Sections><Section Type="Detail" Name="Detail" Height="300"><Control Type="AR.Label" Name="SysCom1" Left="0" Top="0" Width="1000" Height="300" Caption="" /></Section></Sections></ActiveReportsLayout>' AS varbinary(max)));
+INSERT dbo.SY_Setup (CodeID,CodeValue) VALUES ('Com1',N'Công ty giả'),('ReportLocation',N'Hà Nội'),('MailPassword','bi-mat');
+INSERT dbo.SY_FrmCfg (UserAutoID,FID,KeyID,SubID,KeyValue,SubValue) VALUES ('p01','AP_PRCopyReport','EPER','','2',NULL);
+GO
+CREATE PROCEDURE dbo.AP_PurposeRequestListReportStp @Template varchar(50), @PurchaseRequestID varchar(8000), @UserName varchar(100) = NULL
+AS
+BEGIN
+  SET NOCOUNT ON;
+  DELETE dbo.WEB_Canary;
+  SELECT r.PurchaseRequestID, r.PurchaseDate, r.Notes, d.ItemID, d.Quantity, @Template AS Template, @UserName AS UserName
+  FROM dbo.AP_PurchaseRequestTbl r JOIN dbo.AP_PurchaseRequestDetailTbl d ON d.PurchaseRequestID = r.PurchaseRequestID
+  WHERE ';' + @PurchaseRequestID + ';' LIKE '%;' + r.PurchaseRequestID + ';%'
+  ORDER BY d.ItemID;
+  SELECT N'không gửi' AS [Password], 1 AS X;
+  SELECT N'Đã in thử' AS Msg, 0 AS [Type];
+END

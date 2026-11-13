@@ -73,6 +73,25 @@ public sealed class FakeErp : IErpUsers, IErpMenu, IErpScreens, IErpPrint
             ? new PrintTemplateFile("AP_PurposeRequestListReport.rpx", System.Text.Encoding.UTF8.GetBytes("<ActiveReportsLayout Version=\"3.1\" />"), new DateTime(2026, 11, 13), "db")
             : null);
 
+    /// <summary>Mẫu đã lưu gần nhất (mẫu, JSON, ghi chú).</summary>
+    public (string Template, string Json, string? Comment)? LastSave { get; private set; }
+
+    /// <summary>Người dùng không được sửa mẫu (EPER) trong test.</summary>
+    public HashSet<string> CannotDesign { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    public Task<PrintDesignView> DesignAsync(ScreenRequest request, string? template, CancellationToken ct) =>
+        Task.FromResult(request.FormName != "AP_PurposeRequestListFrm" ? new PrintDesignView(ScreenStatus.NotSupported)
+            : SampleScreens.Design(template, !CannotDesign.Contains(request.UserName)));
+
+    public Task<PrintSaveResult> SaveTemplateAsync(ScreenRequest request, string template, string json, string? comment, CancellationToken ct)
+    {
+        if (CannotDesign.Contains(request.UserName)) return Task.FromResult(new PrintSaveResult(false, Errors: ["Bạn không có quyền sửa mẫu báo cáo này."]));
+        var errors = WebErp.Erp.Print.ErpPrint.ValidateTemplate(json);
+        if (errors.Count > 0) return Task.FromResult(new PrintSaveResult(false, Errors: errors));
+        LastSave = (template, json, comment);
+        return Task.FromResult(new PrintSaveResult(true, 3));
+    }
+
     public Task<RecordView> OpenRecordAsync(ScreenRequest request, string key, CancellationToken ct) =>
         Task.FromResult(key == "PO/001" ? SampleScreens.Record(key) : new RecordView(ScreenStatus.NotFound));
 

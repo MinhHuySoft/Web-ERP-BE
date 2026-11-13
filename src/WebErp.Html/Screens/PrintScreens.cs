@@ -1,4 +1,5 @@
 using System.Globalization;
+using WebErp.Core.Messages;
 using WebErp.Core.Print;
 using WebErp.Html.Roles;
 
@@ -10,9 +11,45 @@ namespace WebErp.Html.Screens;
 /// <param name="Design">URL trình thiết kế theo tên mẫu; null = người dùng không được sửa mẫu.</param>
 public sealed record PrintUrls(string Self, string? Para, Func<string, string> Template, Func<string, string>? Design = null);
 
+/// <summary>Đường dẫn của màn thiết kế mẫu (Host dựng).</summary>
+/// <param name="Self">URL màn thiết kế (action của form chọn mẫu), không query string.</param>
+/// <param name="Template">URL mẫu đang có hiệu lực (<c>data-template-src</c>).</param>
+/// <param name="Preview">URL màn in một chứng từ để xem trước bằng dữ liệu thật; null = dữ liệu giả.</param>
+/// <param name="Save">URL lưu (POST); null = chỉ xem.</param>
+public sealed record PrintDesignerUrls(string Self, string? Para, string Template, string? Preview, string? Save);
+
 /// <summary>Màn in theo mẫu (chuẩn ERP-HTML 15.1): screen REPORT + <c>print-document</c> (tham số in, lưới R0, R1…).</summary>
 public static class PrintScreens
 {
+    /// <summary>Màn thiết kế mẫu (chuẩn 15.2): chọn mẫu + <c>print-designer</c> (mẫu, dữ liệu xem trước, form lưu có token).</summary>
+    public static string Designer(PrintDesignView v, string formName, string? menuId, PrintDesignerUrls urls, string? documentId,
+        string antiforgeryField, string antiforgeryToken)
+    {
+        var template = (v.Templates ?? []).FirstOrDefault(t => t.File == v.Template);
+        return ScreenRenderer.Render(new ScreenModel(v.Report, FormTypes.Custom, $"design:{formName}:{v.Template}",
+            $"Thiết kế mẫu in — {template?.Title ?? v.Template}", Mode: v.CanDesign ? "edit" : "view", Para: urls.Para, MenuId: menuId,
+            Messages: v.CanDesign ? null : [ErpMessage.Info("Bạn chỉ được xem mẫu này (quyền sửa mẫu do EPER của mẫu quyết định, như ERP).")]), w =>
+        {
+            var hidden = new List<(string, string)>();
+            if (!string.IsNullOrEmpty(documentId)) hidden.Add(("DocumentID", documentId));
+            if (urls.Para is not null) hidden.Add(("para", urls.Para));
+            FilterRenderer.Write(w, new FilterModel($"pdz-{formName}", urls.Self,
+                [new FieldModel("Template", "Mẫu in", "select", v.Template, Span: 14, Options: (v.Templates ?? []).Select(t => (t.File, t.Title)).ToList())],
+                hidden, "Mở mẫu"));
+            w.Open("section", ("data-erp", "print-designer"), ("data-template-name", v.Template), ("data-template-src", urls.Template),
+                ("data-template-format", v.TemplateFormat), ("data-preview-src", urls.Preview)).Line();
+            if (v.CanDesign && urls.Save is not null)
+            {
+                w.Open("form", ("method", "post"), ("action", urls.Save)).Line();
+                w.Void("input", ("type", "hidden"), ("name", antiforgeryField), ("value", antiforgeryToken)).Line();
+                w.Void("input", ("type", "hidden"), ("name", "Template"), ("value", v.Template)).Line();
+                if (urls.Para is not null) w.Void("input", ("type", "hidden"), ("name", "para"), ("value", urls.Para)).Line();
+                w.Close("form").Line();
+            }
+            w.Close("section").Line();
+        });
+    }
+
     private static readonly CultureInfo Vi = CultureInfo.GetCultureInfo("vi-VN");
 
     public static string Print(PrintView v, string formName, string title, string? menuId, PrintUrls urls)

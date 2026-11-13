@@ -21,7 +21,7 @@
 | M3 | Xem chứng từ (`EDIT` `data-mode="view"`), tab chi tiết nạp lười, quyền form (`GetPermission`), ẩn cột tiền | Không | Phần chính xong 2026-11-12; 16 form chứng từ viết tay (2026-11-12) và 30 form viết tay còn lại (2026-11-13) xem được; in theo mẫu có từ 2026-11-13 (M6) |
 | M4 | Ghi: migration schema `web`, `SavePipeline` (journal `__idem`, `isLock`, khóa sổ, `DateUpdate` → 409, số chứng từ, `UserAutoID`, XML hook, `Msg/MsgType`), `SY_UserLog`, mã công ty trong form | **Có** | Đang làm: CQ-01 chốt 2026-11-13 (bản sao MedData trên z4); P0 nền xong 2026-11-13 |
 | M5 | Trang quản trị trên web (TOTP), chế độ bảo trì, đăng xuất cả công ty từ web, hằng mật khẩu ERP đặt trên web | Không | Xong phần chính 2026-11-12; còn thu hồi phiên theo từng user (cần schema `web`, M4) |
-| M6 | Báo cáo (`*ReportStp`), mẫu in như ActiveReports, xuất Excel, đính kèm có kiểm quyền | Không | In theo mẫu (GĐ1) xong 2026-11-13: nút In trên chứng từ, màn in `print-document`, mẫu `.rpx` từ `SY_RpFTbl`; còn trình thiết kế (GĐ2), màn báo cáo, Excel, đính kèm |
+| M6 | Báo cáo (`*ReportStp`), mẫu in như ActiveReports, xuất Excel, đính kèm có kiểm quyền | Không | In theo mẫu (GĐ1) và trình thiết kế + kho mẫu web (GĐ2) xong 2026-11-13; còn màn báo cáo menu, Excel, đính kèm, GĐ3 mẫu in |
 
 ## M1 — chi tiết
 
@@ -213,5 +213,24 @@ như `ReportViewerFrm` của WinForms:
 - Kiểm trên z4 MedData (chỉ đọc): `AR_InvoiceFrm` → `AR_Invoice2020A5Report` (mẫu trong `SY_RpFTbl` 2025-11-11, 4 dòng, 2 trang),
   `CS_PaymentFrm` → `CS_PaymentReport`; validator FE 0 vi phạm.
 - Chưa: chữ `Lng*` theo ngôn ngữ (đang giữ chữ trong mẫu), ghi `LanIn`/`PrintCount` và `AutoLock` sau khi in, in nhiều chứng từ
-  từ danh sách, màn báo cáo menu (`/erp/reports`), trình thiết kế + kho mẫu web `web.PrintTemplate*` (GĐ2).
+  từ danh sách, màn báo cáo menu (`/erp/reports`).
+
+## M6 — trình thiết kế và kho mẫu web: GĐ2 (2026-11-13)
+
+- **Migration `0002_print_templates`**: `web.PrintTemplate` (báo cáo + mẫu → phiên bản đang dùng) và `web.PrintTemplateVersion`
+  (mỗi lần lưu một dòng, không sửa / xóa: JSON, sha256, ghi chú, người / giờ, nguồn `rpx` kèm ngày + sha256 tệp WinForms hoặc
+  `web`). Đã chạy trên z4 MedData 2026-11-13 13:46 (`tenant migrate MEDCOM`).
+- **Mẫu có hiệu lực**: phiên bản web nếu đã lưu, không thì `.rpx` (`SY_RpFTbl` / thư mục). URL mẫu có `?v=` (w<số phiên bản> /
+  r<ngày tệp>) để FE không dùng bản đệm cũ. Màn in báo "đang dùng mẫu sửa trên web". Không ghi `SY_RpFTbl`: WinForms vẫn in `.rpx`.
+- **Quyền sửa** như `ReportViewerFrm`: quyền Admin trên form luôn được; còn lại theo `EPER` của mẫu (`SY_FrmCfg`, FID = tên tệp):
+  0/trống mọi người, 1 cần Quản lý, 2 chỉ Admin. Không được sửa: màn thiết kế chỉ xem, không form lưu, màn in không có nút thiết kế.
+- **Màn thiết kế** `GET /erp/screens/{Form}/print/designer?Template=&DocumentID=` (chuẩn FE 15.2): chọn mẫu, `print-designer` với
+  mẫu, dữ liệu xem trước (màn in của chứng từ) và form lưu có token.
+- **Lưu** `POST …/print/designer/save` (multipart `Template`, `Json`, `Comment` + token): kiểm lại ở BE (JSON, `$schema`, khổ giấy,
+  loại band / control, mã control hợp lệ và không trùng, biểu thức ≤ 2000 ký tự, ảnh chỉ PNG/JPEG/GIF/BMP base64, không URL ngoài,
+  ≤ 4 triệu ký tự), khóa dòng mẫu (`UPDLOCK`), thêm phiên bản, trỏ mẫu sang; nhật ký `WebErp.Print`. Trả `messages`.
+- Kiểm: test tích hợp trên DB giả (SP báo cáo ghi nhưng đã rollback, bỏ cột mật khẩu, chặn chứng từ ngoài quyền, phiên bản 1 rpx →
+  2 web, mẫu chuyển JSON, `EPER=2` chặn người thường); test host màn thiết kế / lưu / token / chỉ xem; contract (validator FE 15.2).
+- Chưa: danh sách phiên bản + khôi phục trên giao diện, so sánh khi `.rpx` đổi sau phiên bản web, ghi `SY_UserLog` "Sửa mẫu in"
+  (cần đường ghi M4).
 

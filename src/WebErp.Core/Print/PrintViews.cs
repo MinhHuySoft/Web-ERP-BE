@@ -20,6 +20,8 @@ public sealed record PrintUserInput(string Name, string Caption, string? Value);
 /// <param name="Report">Tên báo cáo (<c>&lt;Form bỏ Frm&gt;Report</c> hoặc <c>BPRN</c>).</param>
 /// <param name="Template">Mẫu đang chọn (tên tệp không đuôi).</param>
 /// <param name="TemplateFormat"><c>rpx</c> (tệp WinForms) hoặc <c>json</c> (mẫu web).</param>
+/// <param name="TemplateVersion">Nhãn phiên bản mẫu (đổi khi mẫu đổi) để URL mẫu khác đi, FE không dùng bản đệm cũ.</param>
+/// <param name="CanDesign">Người dùng được sửa mẫu (quyền Admin của form, hoặc <c>EPER</c> của mẫu cho phép).</param>
 public sealed record PrintView(
     ScreenStatus Status,
     string Report = "",
@@ -31,11 +33,32 @@ public sealed record PrintView(
     IReadOnlyList<PrintUserInput>? UserInputs = null,
     IReadOnlyList<PrintDataSet>? Sets = null,
     IReadOnlyList<ErpMessage>? Messages = null,
+    string? Note = null,
+    string TemplateVersion = "",
+    bool CanDesign = false);
+
+/// <summary>Màn thiết kế một mẫu của báo cáo (chuẩn FE 15.2).</summary>
+public sealed record PrintDesignView(
+    ScreenStatus Status,
+    string Report = "",
+    IReadOnlyList<PrintTemplateOption>? Templates = null,
+    string Template = "",
+    string TemplateFormat = "rpx",
+    string TemplateVersion = "",
+    bool CanDesign = false,
     string? Note = null);
 
+/// <summary>Kết quả lưu mẫu: số phiên bản mới, hoặc lỗi để báo người dùng.</summary>
+public sealed record PrintSaveResult(bool Ok, int VersionNo = 0, IReadOnlyList<string>? Errors = null);
+
 /// <summary>Nội dung mẫu in để FE dựng (<c>data-template-src</c>).</summary>
-/// <param name="Source"><c>db</c> (bản mới nhất <c>SY_RpFTbl</c>), <c>folder</c> (thư mục Reports của công ty).</param>
-public sealed record PrintTemplateFile(string FileName, byte[] Content, DateTime? FileDate, string Source, string ContentType = "application/xml");
+/// <param name="Source"><c>web</c> (phiên bản đang dùng của <c>web.PrintTemplate</c>), <c>db</c> (bản mới nhất <c>SY_RpFTbl</c>),
+/// <c>folder</c> (thư mục Reports của công ty).</param>
+public sealed record PrintTemplateFile(string FileName, byte[] Content, DateTime? FileDate, string Source, string ContentType = "application/xml",
+    string Version = "")
+{
+    public string Format => ContentType.Contains("json", StringComparison.OrdinalIgnoreCase) ? "json" : "rpx";
+}
 
 /// <summary>In theo mẫu (M6, docs FE 06-mau-in.md): như <c>ReportViewerFrm</c> của WinForms, chỉ đọc DB ERP.</summary>
 public interface IErpPrint
@@ -52,4 +75,13 @@ public interface IErpPrint
 
     /// <summary>Tệp mẫu <paramref name="template"/> của báo cáo của form; null nếu mẫu không thuộc báo cáo hoặc không tìm thấy.</summary>
     Task<PrintTemplateFile?> TemplateAsync(ScreenRequest request, string template, CancellationToken ct);
+
+    /// <summary>Mở màn thiết kế mẫu <paramref name="template"/> (mặc định mẫu đầu) của báo cáo của form.</summary>
+    Task<PrintDesignView> DesignAsync(ScreenRequest request, string? template, CancellationToken ct);
+
+    /// <summary>
+    /// Lưu mẫu sửa trên web thành phiên bản mới bất biến (<c>web.PrintTemplateVersion</c>), kiểm quyền sửa và kiểm mẫu lại ở BE.
+    /// Không ghi <c>SY_RpFTbl</c>.
+    /// </summary>
+    Task<PrintSaveResult> SaveTemplateAsync(ScreenRequest request, string template, string json, string? comment, CancellationToken ct);
 }

@@ -41,9 +41,23 @@ public sealed class ErpUrls(string pathBase) : IMenuUrls
         + (string.IsNullOrEmpty(template) ? "" : "&Template=" + Uri.EscapeDataString(template))
         + (string.IsNullOrEmpty(para) ? "" : "&para=" + Uri.EscapeDataString(para));
 
-    /// <summary>Tệp mẫu in (<c>data-template-src</c>): <c>.rpx</c> mới nhất của <c>SY_RpFTbl</c> / thư mục Reports.</summary>
-    public string PrintTemplate(string formName, string? para, string template) =>
-        $"{pathBase}/erp/screens/{Uri.EscapeDataString(formName)}/print/templates/{Uri.EscapeDataString(template)}.rpx" + ParaQuery(para);
+    /// <summary>
+    /// Tệp mẫu in (<c>data-template-src</c>): JSON phiên bản web hoặc <c>.rpx</c> mới nhất. <paramref name="version"/> đổi khi mẫu đổi để
+    /// FE không dùng bản đệm cũ.
+    /// </summary>
+    public string PrintTemplate(string formName, string? para, string template, string format = "rpx", string? version = null) =>
+        $"{pathBase}/erp/screens/{Uri.EscapeDataString(formName)}/print/templates/{Uri.EscapeDataString(template)}.{(format == "json" ? "json" : "rpx")}"
+        + (string.IsNullOrEmpty(version) ? "" : "?v=" + Uri.EscapeDataString(version))
+        + (string.IsNullOrEmpty(para) ? "" : (string.IsNullOrEmpty(version) ? "?" : "&") + "para=" + Uri.EscapeDataString(para));
+
+    /// <summary>Màn thiết kế mẫu in (chuẩn 15.2); <paramref name="documentId"/> để xem trước bằng dữ liệu thật.</summary>
+    public string PrintDesigner(string formName, string? para, string template, string? documentId) =>
+        $"{pathBase}/erp/screens/{Uri.EscapeDataString(formName)}/print/designer?Template={Uri.EscapeDataString(template)}"
+        + (string.IsNullOrEmpty(documentId) ? "" : "&DocumentID=" + Uri.EscapeDataString(documentId))
+        + (string.IsNullOrEmpty(para) ? "" : "&para=" + Uri.EscapeDataString(para));
+
+    /// <summary>Lưu mẫu in (POST).</summary>
+    public string PrintDesignerSave(string formName) => $"{pathBase}/erp/screens/{Uri.EscapeDataString(formName)}/print/designer/save";
 
     private static string ParaQuery(string? para) => string.IsNullOrEmpty(para) ? "" : "?para=" + Uri.EscapeDataString(para);
 

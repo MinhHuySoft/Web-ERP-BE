@@ -32,4 +32,25 @@ public sealed class PrintRulesTests
         Assert.Equal([new PrintTemplateOption("AP_OrderReport", "AP_OrderReport")], ErpPrint.ParseTemplates(null, "AP_OrderReport"));
         Assert.Equal([new PrintTemplateOption("AP_OrderReport", "AP_OrderReport")], ErpPrint.ParseTemplates(" ; ", "AP_OrderReport"));
     }
+
+    [Fact]
+    public void Templates_are_validated_again_on_the_server()
+    {
+        Assert.Empty(ErpPrint.ValidateTemplate(SampleScreens.TemplateJson));
+        Assert.Equal(["Mẫu không phải JSON hợp lệ."], ErpPrint.ValidateTemplate("{"));
+        Assert.Equal(["Mẫu không đúng định dạng erp-print-template/1."], ErpPrint.ValidateTemplate("{\"$schema\":\"x\"}"));
+        var dup = SampleScreens.TemplateJson.Replace("\"controls\":[{", "\"controls\":[{\"id\":\"txt1\",\"type\":\"text\"},{");
+        Assert.Contains("Mã control bị trùng: txt1.", ErpPrint.ValidateTemplate(dup));
+        var badId = SampleScreens.TemplateJson.Replace("\"id\":\"txt1\"", "\"id\":\"x;drop\"");
+        Assert.Contains(ErpPrint.ValidateTemplate(badId), e => e.StartsWith("Mã control không hợp lệ", StringComparison.Ordinal));
+        var badBand = SampleScreens.TemplateJson.Replace("\"type\":\"detail\"", "\"type\":\"script\"");
+        Assert.Contains(ErpPrint.ValidateTemplate(badBand), e => e.StartsWith("Band có loại không hợp lệ", StringComparison.Ordinal));
+        var longExpr = SampleScreens.TemplateJson.Replace("{\"field\":\"PurchaseRequestID\"}", "{\"expr\":\"" + new string('x', 2001) + "\"}");
+        Assert.Contains(ErpPrint.ValidateTemplate(longExpr), e => e.Contains("2000", StringComparison.Ordinal));
+        var href = SampleScreens.TemplateJson.Replace("\"assets\":{}", "\"assets\":{\"a\":{\"mime\":\"image/png\",\"href\":\"https://x\"}}");
+        Assert.Contains(ErpPrint.ValidateTemplate(href), e => e.Contains("URL ngoài", StringComparison.Ordinal));
+        var svg = SampleScreens.TemplateJson.Replace("\"assets\":{}", "\"assets\":{\"a\":{\"mime\":\"image/svg+xml\",\"data\":\"PHN2Zz4=\"}}");
+        Assert.Contains(ErpPrint.ValidateTemplate(svg), e => e.Contains("PNG/JPEG", StringComparison.Ordinal));
+        Assert.Single(ErpPrint.ValidateTemplate(new string(' ', ErpPrint.MaxTemplateChars + 1)));
+    }
 }
