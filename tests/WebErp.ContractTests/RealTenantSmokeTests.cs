@@ -229,7 +229,9 @@ public sealed class RealTenantSmokeTests(FrontendValidator validator) : IClassFi
         var store = new SqliteTenantStore(new ConfigDatabase(paths), new SecretProtector(sp.GetRequiredService<IDataProtectionProvider>()), TimeProvider.System);
         var tenant = (await store.GetAsync(tenantKey, CancellationToken.None))!;
         var connections = new ErpConnectionFactory(store, new ErpOptions());
-        var screens = new ErpScreens(connections, new ErpMetadata(connections, TimeProvider.System), new ErpPermissions(connections), TimeProvider.System);
+        var meta = new ErpMetadata(connections, TimeProvider.System);
+        var screens = new ErpScreens(connections, meta, new ErpPermissions(connections), TimeProvider.System);
+        var print = new WebErp.Erp.Print.ErpPrint(connections, meta, screens, new ErpOptions());
         var report = new List<string>();
         var failures = new List<string>();
 
@@ -268,6 +270,25 @@ public sealed class RealTenantSmokeTests(FrontendValidator validator) : IClassFi
             var recHtml = MetaScreens.Record(rec, list.Form.Caption, null, urls, "__RequestVerificationToken", "test");
             await File.WriteAllTextAsync(Path.Combine(outDir, $"{req.RuntimeName}.record.html"), recHtml);
             await AssertValid(recHtml, $"{spec} chứng từ");
+            // In theo mẫu (M6): báo cáo của form, SP <Report>Stp với chứng từ này, tệp mẫu.
+            if (await print.ReportOfAsync(req, CancellationToken.None) is { } rpt)
+            {
+                var pv = await print.PrepareAsync(req, [key], null, new Dictionary<string, string>(), CancellationToken.None);
+                report.Add($"  print {rpt}: {pv.Status} {pv.Note} template={pv.Template} sets={pv.Sets?.Count} rows={string.Join("/", (pv.Sets ?? []).Select(s => s.Rows.Count))} "
+                    + $"params={string.Join(",", (pv.Params ?? []).Select(p => p.Name))} msgs={string.Join(" | ", (pv.Messages ?? []).Select(m => m.Text))}");
+                if (pv.Status == ScreenStatus.Ok)
+                {
+                    var prnHtml = PrintScreens.Print(pv, req.FormName, list.Form.Caption, null,
+                        new PrintUrls($"/erp/screens/{req.FormName}/print", req.Para, t => $"/real/{t}.rpx"));
+                    await File.WriteAllTextAsync(Path.Combine(outDir, $"{req.RuntimeName}.print.html"), prnHtml);
+                    await AssertValid(prnHtml, $"{spec} in");
+                    if (await print.TemplateAsync(req, pv.Template, CancellationToken.None) is { } tf)
+                    {
+                        await File.WriteAllBytesAsync(Path.Combine(outDir, tf.FileName), tf.Content);
+                        report.Add($"    mẫu {tf.FileName}: {tf.Source} {tf.FileDate:yyyy-MM-dd} {tf.Content.Length} B");
+                    }
+                }
+            }
             // Tra cứu F4 của vài ô có danh sách chọn: rỗng và có chữ gõ.
             foreach (var lf in (rec.Tabs ?? []).SelectMany(t => t.Fields).Where(x => x.Control == "lookup").Take(6))
             {

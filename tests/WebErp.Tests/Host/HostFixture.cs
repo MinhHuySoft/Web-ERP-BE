@@ -10,13 +10,14 @@ using WebErp.Core.Auth;
 using WebErp.Core.Errors;
 using WebErp.Core.Menu;
 using WebErp.Core.Metadata;
+using WebErp.Core.Print;
 using WebErp.Core.Tenancy;
 using WebErp.Tests.Support;
 
 namespace WebErp.Tests.Host;
 
 /// <summary>DB ERP giả trong bộ nhớ, thay cho <c>ErpUsers</c>/<c>ErpMenu</c> thật.</summary>
-public sealed class FakeErp : IErpUsers, IErpMenu, IErpScreens
+public sealed class FakeErp : IErpUsers, IErpMenu, IErpScreens, IErpPrint
 {
     public const string Key = "TEST01";
     public Dictionary<string, (ErpUser User, string Hash, bool Enabled)> Users { get; } = new(StringComparer.OrdinalIgnoreCase);
@@ -53,6 +54,24 @@ public sealed class FakeErp : IErpUsers, IErpMenu, IErpScreens
             _ => new ListView(ScreenStatus.NotSupported),
         });
     }
+
+    /// <summary>Yêu cầu in gần nhất (chứng từ, mẫu, tên người ký).</summary>
+    public (IReadOnlyList<string> Ids, string? Template, IReadOnlyDictionary<string, string> Inputs)? LastPrint { get; private set; }
+
+    public Task<string?> ReportOfAsync(ScreenRequest request, CancellationToken ct) =>
+        Task.FromResult(request.FormName == "AP_PurposeRequestListFrm" ? "AP_PurposeRequestListReport" : null);
+
+    public Task<PrintView> PrepareAsync(ScreenRequest request, IReadOnlyList<string> documentIds, string? template,
+        IReadOnlyDictionary<string, string> userInputs, CancellationToken ct)
+    {
+        LastPrint = (documentIds, template, userInputs);
+        return Task.FromResult(documentIds.Count > 0 && documentIds.All(d => d == "PO/001") ? SampleScreens.Print(template) : new PrintView(ScreenStatus.NotFound));
+    }
+
+    public Task<PrintTemplateFile?> TemplateAsync(ScreenRequest request, string template, CancellationToken ct) =>
+        Task.FromResult(template == "AP_PurposeRequestListReport"
+            ? new PrintTemplateFile("AP_PurposeRequestListReport.rpx", System.Text.Encoding.UTF8.GetBytes("<ActiveReportsLayout Version=\"3.1\" />"), new DateTime(2026, 11, 13), "db")
+            : null);
 
     public Task<RecordView> OpenRecordAsync(ScreenRequest request, string key, CancellationToken ct) =>
         Task.FromResult(key == "PO/001" ? SampleScreens.Record(key) : new RecordView(ScreenStatus.NotFound));
@@ -97,6 +116,8 @@ public sealed class HostFixture : IDisposable
                 s.RemoveAll<IErpUsers>();
                 s.RemoveAll<IErpMenu>();
                 s.RemoveAll<IErpScreens>();
+                s.RemoveAll<IErpPrint>();
+                s.AddSingleton<IErpPrint>(Erp);
                 s.AddSingleton<IErpUsers>(Erp);
                 s.AddSingleton<IErpMenu>(Erp);
                 s.AddSingleton<IErpScreens>(Erp);

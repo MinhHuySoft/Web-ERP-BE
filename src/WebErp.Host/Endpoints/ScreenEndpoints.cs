@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Antiforgery;
 using WebErp.Core.Menu;
 using WebErp.Core.Messages;
 using WebErp.Core.Metadata;
+using WebErp.Core.Print;
 using WebErp.Host.Auth;
 using WebErp.Host.Html;
 using WebErp.Html.Screens;
@@ -40,6 +41,7 @@ public static partial class ScreenEndpoints
         g.MapGet("/screens/{formName}/{key}/tabs/{slot}", DetailAsync);
         g.MapGet("/screens/{formName}/lookups/{field}", LookupAsync);
         g.MapGet("/reports/{formName}", ReportAsync);
+        MapPrint(g);
     }
 
     /// <summary>Báo cáo (M6): chưa có, trả màn "chưa có trên web".</summary>
@@ -62,14 +64,24 @@ public static partial class ScreenEndpoints
     }
 
     private static async Task<IResult> RecordAsync(HttpContext ctx, string formName, string key, string? para, MenuService menu, TimeProvider time,
-        IErpScreens screens, IAntiforgery af)
+        IErpScreens screens, IErpPrint print, IAntiforgery af)
     {
         var o = await OpenAsync(ctx, formName, para, menu, time);
         if (o.Stop is not null) return o.Stop;
-        var v = await screens.OpenRecordAsync(Request(ctx, o.Node!, new Dictionary<string, string>()), Key(key), ctx.RequestAborted);
+        var request = Request(ctx, o.Node!, new Dictionary<string, string>());
+        var v = await screens.OpenRecordAsync(request, Key(key), ctx.RequestAborted);
         if (v.Status != ScreenStatus.Ok) return Fallback(ctx, v.Status, o.Node!, v.Note);
         var tokens = af.GetAndStoreTokens(ctx);
-        return HtmlResults.Page(MetaScreens.Record(v, o.Node!.Entry.Caption, o.Node.Entry.MenuId, Urls(ctx, o.Node), tokens.FormFieldName, tokens.RequestToken!));
+        var urls = Urls(ctx, o.Node!);
+        // Nút In (M6) khi form có báo cáo in <Report>Stp, như nút In của WinForms.
+        if (await print.ReportOfAsync(request, ctx.RequestAborted) is not null)
+        {
+            var u = ErpUrls.Of(ctx);
+            var f = o.Node!.Entry.FormName!;
+            var p = urls.Para;
+            urls = urls with { Print = k => u.Print(f, p, k) };
+        }
+        return HtmlResults.Page(MetaScreens.Record(v, o.Node!.Entry.Caption, o.Node.Entry.MenuId, urls, tokens.FormFieldName, tokens.RequestToken!));
     }
 
     private static async Task<IResult> DetailAsync(HttpContext ctx, string formName, string key, string slot, string? para, MenuService menu,

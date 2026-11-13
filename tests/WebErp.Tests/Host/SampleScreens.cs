@@ -1,3 +1,4 @@
+using WebErp.Core.Print;
 using WebErp.Core.Metadata;
 using WebErp.Erp.Metadata;
 
@@ -72,4 +73,18 @@ public static class SampleScreens
     public static DetailView Detail() => new(ScreenStatus.Ok, "T1",
         [new("ItemID", "Mã hàng", "text", null, false, false), new("Quantity", "Số lượng", "quantity", 2, false, true)],
         [["VT01", 2m], ["VT02", 3.5m]], ["d1", "d2"], 2, new Dictionary<string, decimal> { ["Quantity"] = 5.5m }, "UserAutoID");
+
+    /// <summary>Bản in mẫu: hai mẫu, người ký, tham số hệ thống, một result set (có NULL, ngày, số) và một bảng phụ.</summary>
+    public static PrintView Print(string? template) => new(ScreenStatus.Ok, "AP_PurposeRequestListReport",
+        [new PrintTemplateOption("AP_PurposeRequestListReport", "In đề xuất mua hàng"), new PrintTemplateOption("AP_GoodsDeliveryReceiptReport", "In biên bản giao nhận")],
+        template ?? "AP_PurposeRequestListReport", "rpx", ["PO/001"],
+        [new PrintParam("Template", "text", template ?? "AP_PurposeRequestListReport"), new PrintParam("DocumentID", "text", "PO/001"),
+            new PrintParam("UInput1", "text", "Nguyễn Văn A", "Giám đốc"), new PrintParam("Sys.SysCom1", "text", "Công ty Mẫu"),
+            new PrintParam("Sys.ServerDate", "datetime", new DateTime(2026, 11, 13, 9, 30, 0)), new PrintParam("Sys.ReportPrintDate", "bool", true)],
+        [new PrintUserInput("UInput1", "Giám đốc", "Nguyễn Văn A")],
+        [new PrintDataSet([new ViewColumn("DocumentID", "DocumentID", "text", null, false, false), new ViewColumn("DocumentDate", "DocumentDate", "datetime", null, false, false),
+                new ViewColumn("Amount", "Amount", "number", null, false, false), new ViewColumn("Notes", "Notes", "text", null, false, false)],
+            [["PO/001", new DateTime(2026, 11, 10), 1234567.5m, null], ["PO/001", new DateTime(2026, 11, 10), 10m, "Ghi chú <b>"]]),
+         new PrintDataSet([new ViewColumn("ItemID", "ItemID", "text", null, false, false)], [["VT01"]])],
+        []);
 }
