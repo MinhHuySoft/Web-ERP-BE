@@ -360,19 +360,27 @@ public sealed class RealTenantSmokeTests(FrontendValidator validator) : IClassFi
         using var doc = System.Text.Json.JsonDocument.Parse(open.Json!);
         var items = doc.RootElement.GetProperty("items").EnumerateArray()
             .Select(i => (Tab: i.GetProperty("tab").GetString()!, Group: i.GetProperty("group").GetString()!, Name: i.GetProperty("name").GetString()!,
-                Cfg: i.GetProperty("cfg").GetString()!)).ToList();
+                Cfg: i.GetProperty("cfg").GetString()!, From: (string?)null,
+                Props: i.GetProperty("props").EnumerateObject().ToDictionary(p => p.Name, p => p.Value.GetString()!))).ToList();
         var first = items.FindIndex(i => i.Tab == "1" && i.Group == "");
         var second = items.FindIndex(first + 1, i => i.Tab == "1" && i.Group == "");
         Assert.True(first >= 0 && second > first, "Tab 1 cần ít nhất hai ô.");
         (items[first], items[second]) = (items[second], items[first]);
+        // GĐ2: thêm thuộc tính LYS "PT" (dịch xuống) cho ô đầu, đổi tên một nhóm / nhãn nếu có.
+        var p0 = items[first];
+        var hadPt = p0.Props.ContainsKey("PT");
+        if (!hadPt) items[first] = p0 with { Props = new Dictionary<string, string>(p0.Props) { ["PT"] = "-1" } };
         var json = System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, object?>
         {
             ["$schema"] = "erp-form-layout/1", ["form"] = req.RuntimeName, ["revision"] = doc.RootElement.GetProperty("revision").GetString(),
-            ["items"] = items.Select(i => new { tab = i.Tab, group = i.Group, name = i.Name, cfg = i.Cfg }),
+            ["items"] = items.Select(i => new { tab = i.Tab, group = i.Group, name = i.Name, cfg = i.Cfg, props = i.Props }),
         });
-        var saved = await layout.SaveAsync(req, json, "Smoke test: đổi chỗ hai ô đầu, sẽ khôi phục ngay", ct);
+        var saved = await layout.SaveAsync(req, json, "Smoke test: đổi chỗ hai ô đầu + thuộc tính PT, sẽ khôi phục ngay", ct);
         Assert.True(saved.Ok, string.Join(" | ", saved.Errors ?? []));
-        Assert.Equal(2, saved.Changed); // chỉ hai dòng đổi thứ tự
+        Assert.Equal(hadPt ? 2 : 3, saved.Changed); // hai dòng đổi thứ tự (+ một dòng LYS mới)
+        if (!hadPt)
+            Assert.Equal("-1", await c.ExecuteScalarAsync<string>("SELECT KeyValue FROM dbo.SY_FrmCfg WHERE FID = @f AND KeyID = 'LYS1' AND SubID = @s AND SubValue = 'PT'",
+                new { f = req.RuntimeName, s = p0.Name }));
         var form = await meta.GetFormAsync(tenant, req.FormName, req.RuntimeName, ct);
         Assert.Equal(items[first].Name, form!.Layout.First(l => l.Tab == "1").Field);
 

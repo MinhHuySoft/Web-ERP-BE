@@ -93,10 +93,95 @@ public sealed class LayoutModelTests
     }
 
     [Fact]
-    public void Snapshot_round_trips_layout_rows_only()
+    public void Snapshot_round_trips_layout_rows_only_and_old_snapshots_keep_their_scope()
     {
-        var back = LayoutModel.ReadSnapshot(LayoutModel.Snapshot(Rows));
-        Assert.Equal(Rows.Where(LayoutModel.IsLayoutRow).Select(r => r.UserAutoID).Order(StringComparer.Ordinal), back.Select(r => r.UserAutoID).Order(StringComparer.Ordinal));
-        Assert.DoesNotContain(back, r => r.KeyID == "SP");
+        CfgRow[] rows = [.. Rows, new("p1", "T1", "DCP", "Hàng", null), new("p2", "TPV2", "", "1", ""), new("p3", "T1", "TN", "Tbl", null)];
+        var (back, scope) = LayoutModel.ReadSnapshot(LayoutModel.Snapshot(rows));
+        Assert.Equal(rows.Where(LayoutModel.IsLayoutRow).Select(r => r.UserAutoID).Order(StringComparer.Ordinal), back.Select(r => r.UserAutoID).Order(StringComparer.Ordinal));
+        Assert.Contains(back, r => r.UserAutoID == "p1");
+        Assert.DoesNotContain(back, r => r.KeyID is "SP" || r.UserAutoID == "p3");
+        Assert.True(scope(rows.Single(r => r.UserAutoID == "p2")));
+        // Ảnh bản 1 (mảng, GĐ1) không có dòng trang chi tiết: khôi phục không được đụng tới chúng.
+        var (_, oldScope) = LayoutModel.ReadSnapshot("[{\"UserAutoID\":\"a1\",\"KeyID\":\"LYT1\",\"SubID\":\"DocumentID\",\"KeyValue\":\"1\",\"SubValue\":\"001\"}]");
+        Assert.False(oldScope(rows.Single(r => r.UserAutoID == "p1")));
+        Assert.True(oldScope(rows.Single(r => r.UserAutoID == "a1")));
+    }
+
+    [Fact]
+    public void Parse_reads_item_properties()
+    {
+        var (items, _) = LayoutModel.Parse(Rows);
+        Assert.Equal("-16777024", items.Single(i => i.Name == "Notes").Props!["PV4"]);
+        Assert.Empty(items.Single(i => i.Name == "Price").Props!);
+    }
+
+    [Fact]
+    public void Diff_edits_allowed_properties_keeps_sql_ones_and_renames()
+    {
+        CfgRow[] rows =
+        [
+            new("a1", "LYT1", "CommandButtonCtl_2", "22;4;1;;;;;;;;;;;;;;;;;0;0", "001"),
+            new("s1", "LYS1", "CommandButtonCtl_2", "Xem hợp đồng", "BT"),
+            new("s2", "LYS1", "CommandButtonCtl_2", "AR_Invoice_XemHopDongStp N'{0}'", "C4"),
+            new("a2", "LYT1", "UserControl1", "28;6;1;;;;;Nhãn", "002"),
+            new("s3", "LYS1", "UserControl1", "10", "FS"),
+            new("p1", "T1", "DCP", "Chi tiết", null),
+        ];
+        var seq = 0;
+        LayoutItem[] items =
+        [
+            new("1", "", "CommandButtonCtl_2", "22;4;1;;;;;;;;;;;;;;;;;0;0",
+                new Dictionary<string, string> { ["BT"] = "Xem thông tin hợp đồng", ["C4"] = "AR_Invoice_XemHopDongStp N'{0}'", ["PT"] = "-5" }),
+            new("1", "", "LblGhiChu", "28;6;1;;;;;Nhãn", new Dictionary<string, string> { ["FS"] = "", ["FB"] = "1" }, From: "UserControl1"),
+        ];
+        var p = LayoutModel.Diff(rows, items, null, () => $"n{++seq}", new Dictionary<int, PageSetting> { [1] = new("Hàng hóa", "1"), [2] = new(null, "0") });
+        Assert.Null(p.Errors);
+        var up = p.Update.ToDictionary(r => r.UserAutoID);
+        Assert.Equal("Xem thông tin hợp đồng", up["s1"].KeyValue);
+        Assert.False(up.ContainsKey("s2")); // mã có lệnh SQL: giữ nguyên
+        Assert.Equal(("LblGhiChu", "002"), (up["a2"].SubID, up["a2"].SubValue)); // đổi tên giữ UserAutoID
+        Assert.Equal("Hàng hóa", up["p1"].KeyValue);
+        Assert.Equal(["s3"], p.Delete.Select(r => r.UserAutoID)); // FS để trống ⇒ về mặc định
+        Assert.Equal([("LYS1", "CommandButtonCtl_2", "PT", "-5"), ("LYS1", "LblGhiChu", "FB", "1"), ("TPV1", "", "", "1")],
+            p.Insert.Select(r => (r.KeyID, r.SubID ?? "", r.SubValue ?? "", r.KeyValue ?? "")));
+
+        // Sửa mã có SQL / lệnh ⇒ lỗi, kể cả mã mới.
+        var bad = LayoutModel.Diff(rows, [items[0] with { Props = new Dictionary<string, string> { ["C4"] = "DROP TABLE x", ["BT"] = "A" } }], null, () => "x");
+        Assert.Contains(bad.Errors!, e => e.Contains("C4", StringComparison.Ordinal));
+        var bad2 = LayoutModel.Diff(rows, [items[1] with { Props = new Dictionary<string, string> { ["LBS"] = "SELECT 1" } }], null, () => "x");
+        Assert.Contains(bad2.Errors!, e => e.Contains("LBS", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Diff_blocks_tricks_around_command_properties()
+    {
+        CfgRow[] rows =
+        [
+            new("a1", "LYT1", "BarcodeInputCtl", "22;5;1", "001"),
+            new("s1", "LYS1", "BarcodeInputCtl", "AG_XuatKho_BarcodeStp '{0}'", "F1"), // F1 của ô quét mã là câu lệnh
+            new("a2", "LYT1", "CommandButtonCtl_2", "22;4;1", "002"),
+            new("s2", "LYS1", "CommandButtonCtl_2", "AR_Invoice_XemHopDongStp N'{0}'", "C4"),
+        ];
+        // Đổi ô quét mã thành nhãn (28) để sửa F1 (kiểu viền chữ của nhãn): chặn, và cũng không cho đổi loại khi còn F1.
+        var asLabel = LayoutModel.Diff(rows, [new LayoutItem("1", "", "BarcodeInputCtl", "28;5;1", new Dictionary<string, string> { ["F1"] = "1" })], null, () => "x");
+        Assert.Contains(asLabel.Errors!, e => e.Contains("F1", StringComparison.Ordinal));
+        // Đổi tên CommandButtonCtl_2 thành ExecSQLWithParaButtonCtl_9: C4 sẽ bị hiểu là câu lệnh cần chạy ⇒ chặn.
+        var renamed = LayoutModel.Diff(rows, [new LayoutItem("1", "", "ExecSQLWithParaButtonCtl_9", "22;4;1", From: "CommandButtonCtl_2")], null, () => "x");
+        Assert.Contains(renamed.Errors!, e => e.Contains("lớp khác", StringComparison.Ordinal));
+        // Đổi tên trong cùng lớp thì được, thuộc tính đi theo.
+        var same = LayoutModel.Diff(rows, [new LayoutItem("1", "", "CommandButtonCtl_3", "22;4;1", From: "CommandButtonCtl_2")], null, () => "x");
+        Assert.Null(same.Errors);
+        Assert.Contains(same.Update, r => r.UserAutoID == "s2" && r.SubID == "CommandButtonCtl_3" && r.KeyValue == "AR_Invoice_XemHopDongStp N'{0}'");
+        Assert.Equal("ExecSQLWithParaButtonCtl", LayoutModel.UcClass("ExecSQLWithParaButtonCtl_9"));
+        Assert.Equal("AG_XuatKhoFrm", LayoutModel.UcClass("AG_XuatKhoFrm"));
+    }
+
+    [Fact]
+    public void ReadInput_reads_props_rename_and_pages()
+    {
+        var input = LayoutModel.ReadInput("""{"$schema":"erp-form-layout/1","pages":{"1":{"caption":"Hàng","visible":"4"},"7":{"visible":"1"}},"items":[{"tab":"1","name":"B","from":"A","cfg":"28;6;1","props":{"FS":"10","bad code":"x"}}]}""");
+        Assert.Equal(2, input.Errors.Count); // mã thuộc tính sai, quyền xem trang 7 (chỉ trang 1–5)
+        Assert.Equal(("A", "10"), (input.Items[0].From, input.Items[0].Props!["FS"]));
+        Assert.Equal(new PageSetting("Hàng", "4"), input.Pages![1]);
     }
 }

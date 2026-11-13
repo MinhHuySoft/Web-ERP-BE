@@ -29,6 +29,12 @@ public sealed class LayoutStoreTests(FakeErpDatabase db) : IClassFixture<FakeErp
         (await c.QueryAsync<(string, string, string, string?, string?)>(
             "SELECT UserAutoID, KeyID, ISNULL(SubID,''), KeyValue, SubValue FROM dbo.SY_FrmCfg WHERE FID = 'AP_PurposeRequestListFrm' ORDER BY UserAutoID")).ToList();
 
+    private static string Revision(ErpLayout layout, ScreenRequest req)
+    {
+        using var d = JsonDocument.Parse(layout.OpenAsync(req, CancellationToken.None).GetAwaiter().GetResult().Json!);
+        return d.RootElement.GetProperty("revision").GetString()!;
+    }
+
     [Fact]
     public async Task Save_writes_layout_rows_only_versions_and_restores()
     {
@@ -115,5 +121,48 @@ public sealed class LayoutStoreTests(FakeErpDatabase db) : IClassFixture<FakeErp
         Assert.Equal((("restore", 1)), await c.QuerySingleAsync<(string, int)>(
             "SELECT Kind, RestoredFrom FROM web.FormLayoutVersion WHERE FID = 'AP_PurposeRequestListFrm' AND VersionNo = 3"));
         Assert.False((await layout.RestoreAsync(Req(), 99, null, ct)).Ok);
+
+        // GĐ2: thuộc tính LYS (mã cho phép), đổi tên control, tiêu đề / quyền xem trang chi tiết; mã có SQL bị chặn.
+        using (var d = JsonDocument.Parse((await layout.OpenAsync(Req(), ct)).Json!))
+        {
+            var t5 = d.RootElement.GetProperty("tabs").EnumerateArray().Single(t => t.GetProperty("id").GetString() == "5");
+            Assert.Equal(("Hàng hóa đề nghị", true, "0"), (t5.GetProperty("dcp").GetString(), t5.GetProperty("dcpEditable").GetBoolean(), t5.GetProperty("visible").GetString()));
+            Assert.Contains("BT", d.RootElement.GetProperty("editableProps").GetProperty("22").EnumerateArray().Select(x => x.GetString()));
+        }
+        const string gd2 =
+            """
+            {"tab":"1","group":"","name":"PurchaseRequestID","cfg":"1;4;1;1;;;;;;;;;;;;;;;;0;0","props":{}},
+            {"tab":"1","group":"","name":"PurchaseDate","cfg":"4;4;1;;;;;;;;;;;;;;;;;0;0","props":{"MXR":"1"}},
+            {"tab":"1","group":"","name":"CommandButtonCtl_1","from":"CommandButtonCtl","cfg":"22;4;1;;;;;;;;;;;;;;;;;0;0","props":{"BT":"Gửi đề nghị"}},
+            {"tab":"1","group":"","name":"Notes","cfg":"1;99;2;1;;;;;;;;;;;;;;;;0;0","props":{}},
+            {"tab":"1","group":"","name":"Price","cfg":"5;8;1;1;;;;;;;;;;;;;;;;0;0","props":{}},
+            {"tab":"1","group":"","name":"RateExchange","cfg":"5;8;1;;;;;;;;;;;;;;;;1;0;0","props":{}}
+            """;
+        string Gd2(string props) => "{\"$schema\":\"erp-form-layout/1\",\"form\":\"AP_PurposeRequestListFrm\",\"revision\":\"" + Revision(layout, Req())
+            + "\",\"pages\":{\"1\":{\"caption\":\"Hàng đề nghị\",\"visible\":\"4\"}},\"items\":["
+            + gd2.Replace("{\"BT\":\"Gửi đề nghị\"}", props, StringComparison.Ordinal) + "]}";
+        var sqlProp = await layout.SaveAsync(Req(), Gd2("{\"BT\":\"x\",\"LBS\":\"SELECT 1\"}"), null, ct);
+        Assert.False(sqlProp.Ok);
+        Assert.Contains("LBS", sqlProp.Errors![0]);
+        var g = await layout.SaveAsync(Req(), Gd2("{\"BT\":\"Gửi đề nghị\"}"), "GĐ2", ct);
+        Assert.True(g.Ok, string.Join(" | ", g.Errors ?? []));
+        var r2 = await RowsAsync(c);
+        Assert.Equal("c42", r2.Single(r => r.Sub == "CommandButtonCtl_1" && r.Key == "LYT1").Id); // đổi tên giữ UserAutoID
+        Assert.Equal("Gửi đề nghị", r2.Single(r => r.Key == "LYS1" && r.Sub == "CommandButtonCtl_1" && r.Order == "BT").Value);
+        Assert.Equal("1", r2.Single(r => r.Key == "LYS1" && r.Sub == "PurchaseDate" && r.Order == "MXR").Value);
+        Assert.Equal(("c28", "Hàng đề nghị"), r2.Where(r => r.Key == "T1" && r.Sub == "DCP").Select(r => (r.Id, r.Value)).Single());
+        Assert.Equal("4", r2.Single(r => r.Key == "TPV1").Value);
+        var form2 = await meta.GetFormAsync(db.Tenant, "AP_PurposeRequestListFrm", "AP_PurposeRequestListFrm", ct);
+        Assert.Equal("Gửi đề nghị", form2!.Layout.Single(l => l.Field == "CommandButtonCtl_1").ButtonText);
+        Assert.Equal(4, form2.SettingInt("TPV1", 0));
+
+        // Nguồn chép bố cục: danh sách form và bố cục một form; người không phải Admin không xem được.
+        Assert.Contains("\"fid\":\"AP_PurposeRequestListFrm\"", await layout.SourceAsync(Req(), null, ct));
+        Assert.Contains("\"name\":\"CommandButtonCtl_1\"", await layout.SourceAsync(Req(), "AP_PurposeRequestListFrm", ct));
+        Assert.Null(await layout.SourceAsync(Req("ketoan"), null, ct));
+
+        // Khôi phục về trước lần GĐ2: tên, thuộc tính, tiêu đề, quyền xem trang trở lại như cũ.
+        Assert.True((await layout.RestoreAsync(Req(), g.VersionNo, null, ct)).Ok);
+        Assert.Equal(original, await RowsAsync(c));
     }
 }

@@ -54,7 +54,10 @@ public sealed class ErpLayout(ErpConnectionFactory connections, ErpMetadata meta
                 canSave,
                 tabs = Tabs(form, rows),
                 // text: chữ trên nút (LYT vị trí 7, LYS BT / LT, chữ mặc định của control) để khung vẽ hiện như màn chứng từ; FE không gửi lại.
-                items = items.Select(i => new { tab = i.Tab, group = i.Group, name = i.Name, cfg = i.Cfg, text = ButtonText(i, rows) }),
+                // props: thuộc tính riêng LYS của ô (mã → giá trị).
+                items = items.Select(i => new { tab = i.Tab, group = i.Group, name = i.Name, cfg = i.Cfg, text = ButtonText(i, rows), props = i.Props }),
+                // Mã LYS web cho sửa theo loại control ("0" = mọi loại); mã khác chỉ hiện để xem (có SQL / lệnh, sửa trên ERP).
+                editableProps = LayoutModel.EditableProps.ToDictionary(x => x.Key.ToString(CultureInfo.InvariantCulture), x => x.Value),
                 fields,
                 versions,
                 notes = new[]
@@ -77,18 +80,20 @@ public sealed class ErpLayout(ErpConnectionFactory connections, ErpMetadata meta
         {
             if (!string.Equals(LayoutModel.Revision(rows), input.Revision, StringComparison.Ordinal))
                 return (null, "Bố cục của form đã bị đổi (trên ERP WinForms hoặc bởi người khác) từ lúc bạn mở trình vẽ. Mở lại trình vẽ rồi sửa lại.");
-            return (LayoutModel.Diff(rows, input.Items, input.Captions, _ids.NewUserAutoId), null);
+            var plan = LayoutModel.Diff(rows, input.Items, input.Captions, _ids.NewUserAutoId, input.Pages);
+            return plan.Errors is { Count: > 0 } errs ? (null, string.Join(" ", errs)) : (plan, null);
         }, ct);
     }
 
     public async Task<LayoutSaveResult> RestoreAsync(ScreenRequest request, int versionNo, string? comment, CancellationToken ct)
     {
         List<CfgRow>? snapshot = null;
+        Func<CfgRow, bool>? scope = null;
         return await WriteAsync(request, comment, "restore", versionNo, rows =>
         {
             if (snapshot is null) return (null, "Không tìm thấy phiên bản cần khôi phục.");
-            // Khôi phục: mọi dòng bố cục hiện có thay bằng ảnh "trước" của phiên bản, giữ nguyên UserAutoID gốc.
-            var current = rows.Where(LayoutModel.IsLayoutRow).ToList();
+            // Khôi phục: mọi dòng bố cục hiện có (trong phạm vi của ảnh) thay bằng ảnh "trước" của phiên bản, giữ nguyên UserAutoID gốc.
+            var current = rows.Where(scope!).ToList();
             var keep = snapshot.Select(s => s.UserAutoID).ToHashSet(StringComparer.Ordinal);
             var curById = current.ToDictionary(r => r.UserAutoID, StringComparer.Ordinal);
             return (new LayoutModel.Plan(
@@ -101,7 +106,7 @@ public sealed class ErpLayout(ErpConnectionFactory connections, ErpMetadata meta
             var before = await c.ExecuteScalarAsync<string?>(new CommandDefinition(
                 "SELECT BeforeJson FROM web.FormLayoutVersion WHERE FID = @f AND VersionNo = @n", new { f = Ansi(request.RuntimeName, 250), n = versionNo },
                 tx, options.CommandTimeoutSeconds, cancellationToken: ct));
-            snapshot = before is null ? null : LayoutModel.ReadSnapshot(before);
+            if (before is not null) (snapshot, scope) = LayoutModel.ReadSnapshot(before);
         });
     }
 
@@ -179,6 +184,37 @@ public sealed class ErpLayout(ErpConnectionFactory connections, ErpMetadata meta
         return MetadataCompiler.ButtonText(type, i.Name, caption, i.Zone, props);
     }
 
+    /// <summary>
+    /// Nguồn chép bố cục (như "Copy Layout" của WinForms): không có <paramref name="fid"/> ⇒ danh sách FID có bố cục; có ⇒ bố cục
+    /// (ô + thuộc tính LYS, tiêu đề tab) của FID đó, chỉ đọc. Chỉ người được vẽ form đang mở (Admin) mới xem.
+    /// </summary>
+    public async Task<string?> SourceAsync(ScreenRequest request, string? fid, CancellationToken ct)
+    {
+        var perm = await permissions.GetAsync(request.Tenant, request.UserName, request.RuntimeName, ct);
+        if (!perm.Admin) return null;
+        return await ReadAsync<string?>(request.Tenant, async (c, tx) =>
+        {
+            if (string.IsNullOrEmpty(fid))
+            {
+                var list = await c.QueryAsync<(string Fid, int N, string? Caption)>(new CommandDefinition(
+                    """
+                    SELECT c.FID, COUNT(*), MAX(l.CaptionVN) FROM dbo.SY_FrmCfg c LEFT JOIN dbo.SY_FrmLstTbl l ON l.FormID = c.FID
+                    WHERE c.KeyID LIKE 'LYT%' AND c.FID IS NOT NULL GROUP BY c.FID ORDER BY c.FID
+                    """, transaction: tx, commandTimeout: options.CommandTimeoutSeconds, cancellationToken: ct));
+                return JsonSerializer.Serialize(new { forms = list.Select(x => new { fid = x.Fid, items = x.N, caption = x.Caption?.Trim() }) });
+            }
+            var rows = await RowsAsync(c, tx, fid, false, ct);
+            var (items, _) = LayoutModel.Parse(rows);
+            string? Cap(string key) => rows.FirstOrDefault(r => r.KeyID.Equals(key, StringComparison.OrdinalIgnoreCase) && string.IsNullOrEmpty(r.SubID))?.KeyValue?.Trim();
+            return JsonSerializer.Serialize(new
+            {
+                form = fid,
+                captions = LayoutModel.CaptionKeys.ToDictionary(k => k, Cap),
+                items = items.Select(i => new { tab = i.Tab, group = i.Group, name = i.Name, cfg = i.Cfg, text = ButtonText(i, rows), props = i.Props }),
+            });
+        }, _ => null, ct);
+    }
+
     /// <summary>Form viết tay có bố cục trong tệp mô tả (không đọc SY_FrmCfg): web không vẽ được.</summary>
     private static string? Blocked(ScreenRequest request) =>
         FormOverlays.Get(request.FormName, request.Para) is { UseDbConfig: false }
@@ -216,6 +252,7 @@ public sealed class ErpLayout(ErpConnectionFactory connections, ErpMetadata meta
             list.Add(new { id, kind = "master", captionKey = LayoutModel.CaptionKeys[i], caption = Cap(LayoutModel.CaptionKeys[i]) ?? "",
                 defaultCaption = i == 0 ? "Thông tin chung" : $"Thông tin {i + 1}" });
         }
+        var (dcps, vis) = LayoutModel.Pages(rows);
         for (var n = 1; n <= 9; n++)
         {
             var slot = form.Slots.GetValueOrDefault($"T{n}");
@@ -223,7 +260,11 @@ public sealed class ErpLayout(ErpConnectionFactory connections, ErpMetadata meta
             list.Add(new { id = (n + 4).ToString(CultureInfo.InvariantCulture), kind = "detail", page = n,
                 caption = own ?? slot?.Caption ?? $"Chi tiết {n}", defaultCaption = $"Chi tiết {n}",
                 hint = own is not null ? $"Trang riêng \"{own}\" (form viết tay) đứng trước lưới T{n}."
-                    : $"Trang chi tiết {n}: ô của chứng từ (LYT{n + 4}) đứng trên lưới T{n}{(slot?.Caption is { } dc ? $" \"{dc}\"" : "")} cùng trang." });
+                    : $"Trang chi tiết {n}: ô của chứng từ (LYT{n + 4}) đứng trên lưới T{n}{(slot?.Caption is { } dc ? $" \"{dc}\"" : "")} cùng trang.",
+                // Tiêu đề trang (T{n} / DCP) và quyền xem (TPV{n}, trang 1–5) sửa được khi form có lưới T{n} và không phải trang riêng của form viết tay.
+                grid = slot is not null,
+                dcp = dcps.GetValueOrDefault(n), dcpEditable = slot is not null && own is null,
+                visible = n <= 5 ? vis.GetValueOrDefault(n) ?? "0" : null, visibleEditable = slot is not null && n <= 5 });
         }
         return [.. list];
     }
