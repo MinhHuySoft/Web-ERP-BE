@@ -86,5 +86,16 @@ public static class SampleScreens
                 new ViewColumn("Amount", "Amount", "number", null, false, false), new ViewColumn("Notes", "Notes", "text", null, false, false)],
             [["PO/001", new DateTime(2026, 11, 10), 1234567.5m, null], ["PO/001", new DateTime(2026, 11, 10), 10m, "Ghi chú <b>"]]),
          new PrintDataSet([new ViewColumn("ItemID", "ItemID", "text", null, false, false)], [["VT01"]])],
-        []);
+        [], TemplateVersion: "r20261113000000", CanDesign: true);
+
+    /// <summary>Màn thiết kế mẫu: hai mẫu, mẫu web phiên bản 2.</summary>
+    public static PrintDesignView Design(string? template, bool canDesign) => new(ScreenStatus.Ok, "AP_PurposeRequestListReport",
+        [new PrintTemplateOption("AP_PurposeRequestListReport", "In đề xuất mua hàng"), new PrintTemplateOption("AP_GoodsDeliveryReceiptReport", "In biên bản giao nhận")],
+        template ?? "AP_PurposeRequestListReport", "json", "w2", canDesign);
+
+    /// <summary>Mẫu JSON nhỏ hợp lệ để lưu thử.</summary>
+    public const string TemplateJson =
+        "{\"$schema\":\"erp-print-template/1\",\"id\":\"AP_PurposeRequestListReport\",\"unit\":\"mm\",\"page\":{\"width\":210,\"height\":297,"
+        + "\"margin\":{\"top\":10,\"right\":10,\"bottom\":10,\"left\":10},\"bodyWidth\":190},\"groups\":[],\"bands\":[{\"id\":\"Detail\",\"type\":\"detail\","
+        + "\"height\":6,\"controls\":[{\"id\":\"txt1\",\"type\":\"text\",\"x\":0,\"y\":0,\"w\":30,\"h\":5,\"value\":{\"field\":\"PurchaseRequestID\"}}]}],\"assets\":{}}";
 }

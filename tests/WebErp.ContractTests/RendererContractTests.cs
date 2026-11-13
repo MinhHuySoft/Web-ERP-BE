@@ -50,7 +50,17 @@ public sealed class RendererContractTests(FrontendValidator validator) : IClassF
             MetaScreens.Record(SampleScreens.Record("PO/001"), "Đề nghị mua hàng", "05011",
                 MetaUrls with { Print = k => "/erp/screens/AP_PurposeRequestListFrm/print?DocumentID=" + Uri.EscapeDataString(k) }, "__RequestVerificationToken", "t"),
             PrintScreens.Print(SampleScreens.Print(null), "AP_PurposeRequestListFrm", "Đề nghị mua hàng", "05011",
-                new PrintUrls("/erp/screens/AP_PurposeRequestListFrm/print", null, t => $"/erp/screens/AP_PurposeRequestListFrm/print/templates/{t}.rpx")),
+                new PrintUrls("/erp/screens/AP_PurposeRequestListFrm/print", null, t => $"/erp/screens/AP_PurposeRequestListFrm/print/templates/{t}.rpx?v=r1",
+                    t => $"/erp/screens/AP_PurposeRequestListFrm/print/designer?Template={t}&DocumentID=PO%2F001")),
+            PrintScreens.Designer(SampleScreens.Design(null, true), "AP_PurposeRequestListFrm", "05011",
+                new PrintDesignerUrls("/erp/screens/AP_PurposeRequestListFrm/print/designer", null,
+                    "/erp/screens/AP_PurposeRequestListFrm/print/templates/AP_PurposeRequestListReport.json?v=w2",
+                    "/erp/screens/AP_PurposeRequestListFrm/print?DocumentID=PO%2F001", "/erp/screens/AP_PurposeRequestListFrm/print/designer/save"),
+                "PO/001", "__RequestVerificationToken", "t"),
+            PrintScreens.Designer(SampleScreens.Design(null, false), "AP_PurposeRequestListFrm", "05011",
+                new PrintDesignerUrls("/erp/screens/AP_PurposeRequestListFrm/print/designer", null,
+                    "/erp/screens/AP_PurposeRequestListFrm/print/templates/AP_PurposeRequestListReport.json?v=w2", null, null),
+                null, "__RequestVerificationToken", "t"),
         };
     }
 

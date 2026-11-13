@@ -25,7 +25,7 @@ public sealed class WebSchemaTests(FakeErpDatabase db) : IClassFixture<FakeErpDa
         Assert.True(status.UpToDate);
         Assert.Equal("test", status.Applied[0].AppliedBy);
 
-        foreach (var t in new[] { "web.MigrationHistory", "web.CommandJournal", "web.PostCommitTask" })
+        foreach (var t in new[] { "web.MigrationHistory", "web.CommandJournal", "web.PostCommitTask", "web.PrintTemplate", "web.PrintTemplateVersion" })
             Assert.Equal(1, await c.ExecuteScalarAsync<int>("SELECT CASE WHEN OBJECT_ID(@t, 'U') IS NULL THEN 0 ELSE 1 END", new { t }));
         Assert.Equal(dboBefore, await c.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM sys.objects WHERE schema_id = SCHEMA_ID('dbo')"));
     }

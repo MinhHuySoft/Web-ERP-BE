@@ -231,7 +231,7 @@ public sealed class RealTenantSmokeTests(FrontendValidator validator) : IClassFi
         var connections = new ErpConnectionFactory(store, new ErpOptions());
         var meta = new ErpMetadata(connections, TimeProvider.System);
         var screens = new ErpScreens(connections, meta, new ErpPermissions(connections), TimeProvider.System);
-        var print = new WebErp.Erp.Print.ErpPrint(connections, meta, screens, new ErpOptions());
+        var print = new WebErp.Erp.Print.ErpPrint(connections, meta, screens, new ErpPermissions(connections), new ErpOptions());
         var report = new List<string>();
         var failures = new List<string>();
 

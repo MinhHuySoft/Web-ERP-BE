@@ -12,6 +12,7 @@ using WebErp.Core.Tenancy;
 using WebErp.Erp.Connection;
 using WebErp.Erp.Metadata;
 using WebErp.Erp.Screens;
+using WebErp.Erp.Security;
 
 namespace WebErp.Erp.Print;
 
@@ -28,7 +29,8 @@ namespace WebErp.Erp.Print;
 /// dùng (control <c>Sys*</c>), không bao giờ gửi tên có dạng bí mật.</item>
 /// </list>
 /// </summary>
-public sealed partial class ErpPrint(ErpConnectionFactory connections, ErpMetadata metadata, IErpScreens screens, ErpOptions options) : IErpPrint
+public sealed partial class ErpPrint(ErpConnectionFactory connections, ErpMetadata metadata, IErpScreens screens, ErpPermissions permissions,
+    ErpOptions options) : IErpPrint
 {
     /// <summary>Số chứng từ tối đa một lần in (mỗi chứng từ được kiểm quyền xem).</summary>
     public const int MaxDocuments = 50;
@@ -169,11 +171,9 @@ public sealed partial class ErpPrint(ErpConnectionFactory connections, ErpMetada
             }
 
             // Tham số hệ thống mẫu cần (control Sys* trong .rpx) + vài tên luôn gửi; không bao giờ gửi tên dạng bí mật.
-            var file = await LoadTemplateAsync(c, tx, request.Tenant, chosen.File, ct);
+            var file = await ResolveTemplateAsync(c, tx, request.Tenant, report, chosen.File, ct);
             var wanted = new HashSet<string>(AlwaysSys, StringComparer.OrdinalIgnoreCase);
-            if (file is not null)
-                foreach (Match m in SysControl().Matches(Encoding.UTF8.GetString(file.Content)))
-                    if (m.Groups[1].Value.StartsWith("Sys", StringComparison.OrdinalIgnoreCase)) wanted.Add(m.Groups[1].Value.Split('_')[0]);
+            if (file is not null) wanted.UnionWith(SysNames(file));
             var lookup = tokens.GroupBy(t => t.Key, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First().Value, StringComparer.OrdinalIgnoreCase);
             var serverDate = await c.ExecuteScalarAsync<DateTime>(new CommandDefinition("SELECT GETDATE()", transaction: tx, cancellationToken: ct));
             var ps = new List<PrintParam> { new("Template", "text", chosen.File), new(docParam?.TrimStart('@') ?? "DocumentID", "text", string.Join(';', ids)) };
@@ -197,7 +197,9 @@ public sealed partial class ErpPrint(ErpConnectionFactory connections, ErpMetada
             if (sets.Count == 0) messages.Add(ErpMessage.Warning($"{report}Stp không trả dữ liệu để in."));
             if (sets.Any(s => s.Truncated)) messages.Add(ErpMessage.Warning($"Dữ liệu in quá {MaxRows.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"))} dòng, chỉ in phần đầu."));
             if (file is null) messages.Add(ErpMessage.Error($"Không tìm thấy mẫu {chosen.File}.rpx trong SY_RpFTbl hoặc thư mục Reports của công ty."));
-            return new PrintView(ScreenStatus.Ok, report, templates, chosen.File, "rpx", ids, ps, inputs, sets, messages);
+            else if (file.Source == "web") messages.Add(ErpMessage.Info($"Đang dùng mẫu sửa trên web (phiên bản {file.Version[1..]}); WinForms vẫn in theo mẫu .rpx của nó."));
+            return new PrintView(ScreenStatus.Ok, report, templates, chosen.File, file?.Format ?? "rpx", ids, ps, inputs, sets, messages,
+                TemplateVersion: file?.Version ?? "", CanDesign: file is not null && await CanDesignAsync(c, tx, request, chosen.File, ct));
         }, note => new PrintView(ScreenStatus.ConfigError, report, Note: note), ct);
     }
 
@@ -207,11 +209,9 @@ public sealed partial class ErpPrint(ErpConnectionFactory connections, ErpMetada
         if (form is null || !form.IsEdit || ReportName(form) is not { } report || !FilePattern().IsMatch(template)) return null;
         return await RunAsync<PrintTemplateFile?>(request.Tenant, async (c, tx) =>
         {
-            var templates = ParseTemplates(await c.ExecuteScalarAsync<string?>(new CommandDefinition(
-                "SELECT TOP 1 CAST(DefaultValueVN AS nvarchar(4000)) FROM dbo.SY_RpDTbl WHERE RpName = @r AND PName = 'Template'",
-                new { r = report }, tx, options.CommandTimeoutSeconds, cancellationToken: ct)), report);
+            var templates = await TemplatesAsync(c, tx, report, ct);
             var chosen = templates.FirstOrDefault(t => t.File.Equals(template, StringComparison.OrdinalIgnoreCase));
-            return chosen is null ? null : await LoadTemplateAsync(c, tx, request.Tenant, chosen.File, ct);
+            return chosen is null ? null : await ResolveTemplateAsync(c, tx, request.Tenant, report, chosen.File, ct);
         }, _ => null, ct);
     }
 
