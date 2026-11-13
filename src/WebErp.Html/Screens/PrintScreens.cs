@@ -92,7 +92,11 @@ public static class PrintScreens
     {
         w.Open("table", ("data-erp", "grid"), ("data-grid-id", id), ("data-selectable", "none")).Line();
         w.Open("thead").Open("tr");
-        foreach (var c in s.Columns) w.Element("th", c.Field, ("scope", "col"), ("data-field", c.Field), ("data-type", c.Type));
+        for (var i = 0; i < s.Columns.Count; i++)
+        {
+            var c = s.Columns[i];
+            w.Element("th", c.Field, ("scope", "col"), ("data-field", c.Field), ("data-type", c.Type), ("data-format", s.Formats is { } f && i < f.Count ? f[i] : null));
+        }
         w.Close("tr").Close("thead").Line();
         w.Open("tbody").Line();
         foreach (var r in s.Rows)

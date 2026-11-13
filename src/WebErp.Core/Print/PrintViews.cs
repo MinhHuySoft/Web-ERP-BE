@@ -7,7 +7,9 @@ namespace WebErp.Core.Print;
 public sealed record PrintTemplateOption(string File, string Title);
 
 /// <summary>Một result set của SP báo cáo: cột (kiểu chuẩn 11.2) và giá trị thô.</summary>
-public sealed record PrintDataSet(IReadOnlyList<ViewColumn> Columns, IReadOnlyList<object?[]> Rows, bool Truncated = false);
+/// <param name="Formats">Chuỗi định dạng .NET của từng cột (<c>SY_FmtFldTbl</c>, song song với <see cref="Columns"/>); null = không có.</param>
+public sealed record PrintDataSet(IReadOnlyList<ViewColumn> Columns, IReadOnlyList<object?[]> Rows, bool Truncated = false,
+    IReadOnlyList<string?>? Formats = null);
 
 /// <summary>Một tham số in (chuẩn 15.1): tên trơn = tham số báo cáo; <c>Sys.</c>, <c>Lang.</c>, <c>Caption.</c> theo đặc tả.</summary>
 /// <param name="Type"><c>text</c>, <c>number</c>, <c>date</c>, <c>datetime</c>, <c>bool</c>.</param>

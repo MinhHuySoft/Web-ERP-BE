@@ -125,6 +125,23 @@ public sealed class ErpMetadata(ErpConnectionFactory connections, TimeProvider t
             return new FieldFormats(global, perForm, any);
         });
 
+    /// <summary>
+    /// Chuỗi định dạng .NET theo tên cột như bảng <c>"Format"</c> của WinForms (<c>Functions.GetFormatString</c>): <c>SY_FmtFldTbl</c> nối
+    /// <c>SY_FmatTbl</c>, mọi dòng kể cả dòng riêng của form, lấy dòng đầu theo <c>AutoID</c>, so tên không phân biệt hoa thường; dòng đầu
+    /// không có định dạng thì là chuỗi rỗng. Trình xem báo cáo dùng nó cho ô TextBox để trống <c>OutputFormat</c> (<c>FormatField</c>).
+    /// </summary>
+    public async Task<IReadOnlyDictionary<string, string>> GetFormatStringsAsync(Tenant tenant, CancellationToken ct) =>
+        await Cached($"fmtstr:{tenant.Key}", async () =>
+        {
+            await using var c = await Open(tenant, ct);
+            var rows = await c.QueryAsync<(string FieldName, string? FormatString)>(new CommandDefinition(
+                "SELECT A.FieldName, CAST(B.FormatString AS nvarchar(200)) FROM dbo.SY_FmtFldTbl A LEFT JOIN dbo.SY_FmatTbl B ON B.FormatID = A.FormatID " +
+                "WHERE A.FieldName IS NOT NULL ORDER BY A.AutoID", commandTimeout: connections.Options.CommandTimeoutSeconds, cancellationToken: ct));
+            var d = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var r in rows) d.TryAdd(r.FieldName.Trim(), r.FormatString?.Trim() ?? "");
+            return (IReadOnlyDictionary<string, string>)d;
+        });
+
     /// <summary>Cột của bảng/view (để biết có <c>UserCreate</c>, <c>BranchID</c>, cột ngày… không). Rỗng nếu không phải tên bảng/view.</summary>
     public async Task<IReadOnlySet<string>> GetColumnsAsync(Tenant tenant, string tableOrView, CancellationToken ct) =>
         await Cached($"cols:{tenant.Key}:{tableOrView}", async () =>

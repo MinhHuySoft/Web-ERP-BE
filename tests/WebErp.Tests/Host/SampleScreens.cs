@@ -84,7 +84,8 @@ public static class SampleScreens
         [new PrintUserInput("UInput1", "Giám đốc", "Nguyễn Văn A")],
         [new PrintDataSet([new ViewColumn("DocumentID", "DocumentID", "text", null, false, false), new ViewColumn("DocumentDate", "DocumentDate", "datetime", null, false, false),
                 new ViewColumn("Amount", "Amount", "number", null, false, false), new ViewColumn("Notes", "Notes", "text", null, false, false)],
-            [["PO/001", new DateTime(2026, 11, 10), 1234567.5m, null], ["PO/001", new DateTime(2026, 11, 10), 10m, "Ghi chú <b>"]]),
+            [["PO/001", new DateTime(2026, 11, 10), 1234567.5m, null], ["PO/001", new DateTime(2026, 11, 10), 10m, "Ghi chú <b>"]], false,
+            [null, "dd/MM/yyyy", "#,##0", null]),
          new PrintDataSet([new ViewColumn("ItemID", "ItemID", "text", null, false, false)], [["VT01"]])],
         [], TemplateVersion: "r20261113000000", CanDesign: true);
 

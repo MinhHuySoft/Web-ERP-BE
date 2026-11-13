@@ -100,6 +100,7 @@ public sealed partial class ErpPrint(ErpConnectionFactory connections, ErpMetada
             if (r.Status != ScreenStatus.Ok) return new PrintView(r.Status == ScreenStatus.ConfigError ? ScreenStatus.ConfigError : ScreenStatus.NotFound, report, Note: r.Note);
         }
         var tokens = await metadata.GetUserTokensAsync(request.Tenant, request.UserName, ct);
+        var formats = await metadata.GetFormatStringsAsync(request.Tenant, ct);
         return await RunAsync(request.Tenant, async (c, tx) =>
         {
             if (!await ProcedureExistsAsync(c, tx, report, ct)) return new PrintView(ScreenStatus.NotSupported, report);
@@ -165,7 +166,8 @@ public sealed partial class ErpPrint(ErpConnectionFactory connections, ErpMetada
                         }
                         continue;
                     }
-                    sets.Add(new PrintDataSet(keep.Select(k => new ViewColumn(k.n, k.n, ColumnType(types[k.i]), null, false, false)).ToList(), rows, truncated));
+                    sets.Add(new PrintDataSet(keep.Select(k => new ViewColumn(k.n, k.n, ColumnType(types[k.i]), null, false, false)).ToList(), rows, truncated,
+                        keep.Select(k => formats.TryGetValue(k.n, out var f) && f.Length > 0 ? f : null).ToList()));
                 }
                 while (await reader.NextResultAsync(ct));
             }

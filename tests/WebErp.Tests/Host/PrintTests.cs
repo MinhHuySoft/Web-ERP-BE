@@ -33,7 +33,8 @@ public sealed class PrintTests(HostFixture f)
         Assert.Contains("<dd data-name=\"Sys.ReportPrintDate\" data-type=\"bool\" data-value=\"true\">", html);
         Assert.Contains("<table data-erp=\"grid\" data-grid-id=\"R0\"", html);
         Assert.Contains("<table data-erp=\"grid\" data-grid-id=\"R1\"", html);
-        Assert.Contains("<th scope=\"col\" data-field=\"Amount\" data-type=\"number\">", html);
+        Assert.Contains("<th scope=\"col\" data-field=\"Amount\" data-type=\"number\" data-format=\"#,##0\">", html);
+        Assert.Contains("<th scope=\"col\" data-field=\"DocumentID\" data-type=\"text\">", html);
         Assert.Contains("<td data-value=\"1234567.5\">1.234.567,5</td>", html);
         Assert.Contains("<td data-value=\"2026-11-10\">10/11/2026</td>", html);
         Assert.Contains("<td data-null></td>", html);

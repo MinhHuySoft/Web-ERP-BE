@@ -46,6 +46,9 @@ public sealed class PrintStoreTests(FakeErpDatabase db) : IClassFixture<FakeErpD
         Assert.Equal("AP_PurposeRequestListReport", v.Sets[0].Rows[0][cols.IndexOf("Template")]);
         Assert.Equal("Admin", v.Sets[0].Rows[0][cols.IndexOf("UserName")]);
         Assert.Equal(["X"], v.Sets[1].Columns.Select(x => x.Field)); // cột dạng mật khẩu bị bỏ
+        // Định dạng cột như FormatField của WinForms: SY_FmtFldTbl (Quantity → Q2 "#,##0.##"), cột không có dòng → null.
+        Assert.Equal("#,##0.##", v.Sets[0].Formats![cols.IndexOf("Quantity")]);
+        Assert.Null(v.Sets[0].Formats![cols.IndexOf("Notes")]);
         Assert.Contains(v.Messages!, m => m.Text == "Đã in thử");
         Assert.Contains(v.Params!, p => p.Name == "Sys.SysCom1" && (string?)p.Value == "Công ty giả");
         Assert.Contains(v.Params!, p => p.Name == "UInput1" && (string?)p.Value == "Lê Thu" && p.Caption == "Người lập");
