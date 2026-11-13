@@ -176,7 +176,14 @@ public sealed record FilterMeta(string Key, string Column, string? Caption, int 
     string? DisplayColumn, int Operator, string? WhereString, string? DefaultValue);
 
 /// <summary>Một ô của bố cục chứng từ (<c>SY_FrmCfg</c> KeyID <c>LYT{tab}</c>, tài liệu 10 §5).</summary>
+/// <param name="Tab">Phần sau <c>LYT</c>: <c>1,2,3,A,B,C</c> tab master; <c>5…13</c> trang chi tiết 1…9 (tài liệu 10 §4.8).</param>
 /// <param name="ControlType">1 text, 2 combo, 3 combo nhiều chọn, 4 ngày, 5 số, 6 checkbox, 22/24/26 nút, 23 nhóm, 28 nhãn…</param>
 /// <param name="VisiblePermiss">0 mọi người, 7 Manager, 9 Admin.</param>
+/// <param name="ButtonText">Chữ trên nút (ControlType 22 dạng nút, 24, 26); null = không phải nút hoặc không biết chữ (web bỏ qua).</param>
 public sealed record LayoutFieldMeta(string Tab, string Field, string Order, int ControlType, int Span, int Rows, bool RowStart,
-    bool ReadOnly, string? Caption, bool Hidden, int VisiblePermiss);
+    bool ReadOnly, string? Caption, bool Hidden, int VisiblePermiss, string? ButtonText = null)
+{
+    /// <summary>Trang chi tiết (1…9) của ô nằm trên tab chi tiết (<c>LYT5…LYT13</c>); 0 nếu là tab master.</summary>
+    public int DetailPage => int.TryParse(Tab, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var n)
+        && n is >= 5 and <= 13 ? n - 4 : 0;
+}

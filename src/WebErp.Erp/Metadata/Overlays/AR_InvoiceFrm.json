@@ -8,6 +8,8 @@
   "cfg": {
     "SP": "9",
     "DFP": "DocumentDate",
+    // Trang chi tiết 2 của form viết tay: ô LYT6 (công nợ, chiết khấu) là trang riêng trước lưới T2 (UiTabPage2 của WinForms).
+    "L6V": "Công nợ & Giảm giá / CK",
     "T0": {
       "TN": "AR_InvoiceTbl",
       "PK": "DocumentID",

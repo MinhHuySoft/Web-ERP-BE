@@ -132,7 +132,7 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
                 if (d.Optional && (await metadata.GetColumnsAsync(req.Tenant, d.Source, ct)).Count == 0) continue;
                 visible.Add(d);
             }
-            var details = visible.Select((d, i) => new ViewDetailTab(d.Id, d.Caption ?? (i == 0 ? "Chi tiết" : $"Chi tiết {i + 1}"))).ToList();
+            var details = await DetailPagesAsync(ctx, form, slot, master, visible, c, tx, ct);
             return new RecordView(ScreenStatus.Ok, form, key, slot.PrimaryKey, tabs, details);
         }, e => new RecordView(ScreenStatus.ConfigError, form, key, Note: e), ct);
     }
@@ -447,29 +447,19 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
     {
         var row = master.Rows[0];
         var value = MasterValue(master);
-        var index = master.Names.Select((n, i) => (n, i)).ToDictionary(x => x.n, x => x.i, StringComparer.OrdinalIgnoreCase);
         var removed = Removed(ctx, slot);
         var tabs = new List<ViewTab>();
         if (form.Layout.Count > 0)
         {
             string[] order = ["1", "2", "3", "A", "B", "C"];
             string[] keys = ["T1V", "T2V", "T3V", "TAV", "TBV", "TCV"];
-            foreach (var g in form.Layout.GroupBy(l => l.Tab).OrderBy(g => Array.IndexOf(order, g.Key)))
+            // Chỉ tab master; ô của trang chi tiết (LYT5…13) nằm ở DetailPagesAsync.
+            foreach (var g in form.Layout.Where(l => order.Contains(l.Tab, StringComparer.OrdinalIgnoreCase))
+                         .GroupBy(l => l.Tab.ToUpperInvariant()).OrderBy(g => Array.IndexOf(order, g.Key)))
             {
-                var fields = new List<ViewField>();
-                foreach (var l in g)
-                {
-                    if (l.ControlType is 22 or 23 or 24 or 26 or 30) continue; // nút, nhóm, HTML: không có ở chế độ xem
-                    if (l.VisiblePermiss == 7 && !ctx.Perm.SeesAll || l.VisiblePermiss == 9 && !ctx.Perm.Admin) continue;
-                    if (removed.Contains(l.Field) || IsSecret(l.Field) || !index.TryGetValue(l.Field, out var i)) continue;
-                    // Caption của SY_FrmDrdwTbl đè nhãn LYT (FormControler.SetEditorArr, khi ngôn ngữ VN).
-                    var dd = form.MasterDropdown(l.Field);
-                    var caption = dd?.Caption ?? l.Caption ?? ctx.Form.Captions.GetValueOrDefault($"C:{l.Field}") ?? Title(ctx, "F0", l.Field);
-                    fields.Add(await LookupFieldAsync(ctx, slot, dd, Field(ctx, l.Field, caption, l.ControlType, master.Types[i], row[i], l.Span, l.Rows, l.RowStart),
-                        l.ControlType, value, c, tx, ct));
-                }
+                var fields = await LayoutFieldsAsync(ctx, form, slot, master, g, c, tx, ct);
                 var k = Array.IndexOf(order, g.Key);
-                if (fields.Count > 0)
+                if (fields.Any(f => f.Control != "button"))
                     tabs.Add(new ViewTab(g.Key, form.Setting(keys[k]) ?? (k == 0 ? "Thông tin chung" : $"Thông tin {k + 1}"), fields));
             }
         }
@@ -489,6 +479,80 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
             tabs.Add(new ViewTab("1", "Thông tin chung", fields));
         }
         return tabs;
+    }
+
+    /// <summary>
+    /// Ô của một tab bố cục theo thứ tự LYT. Nhóm (23) và HTML (30) chưa có ở chế độ xem; nút (22 dạng nút, 24, 26) hiện như ERP nhưng
+    /// khóa (web chưa chạy lệnh của nút, chờ M4); user control khác (lưới con, đính kèm…) bỏ qua.
+    /// </summary>
+    private static async Task<List<ViewField>> LayoutFieldsAsync(Ctx ctx, FormMeta form, SlotMeta slot, SqlRows master, IEnumerable<LayoutFieldMeta> items,
+        SqlConnection c, SqlTransaction tx, CancellationToken ct)
+    {
+        var row = master.Rows[0];
+        var value = MasterValue(master);
+        var index = master.Names.Select((n, i) => (n, i)).ToDictionary(x => x.n, x => x.i, StringComparer.OrdinalIgnoreCase);
+        var removed = Removed(ctx, slot);
+        var fields = new List<ViewField>();
+        foreach (var l in items)
+        {
+            if (l.VisiblePermiss == 7 && !ctx.Perm.SeesAll || l.VisiblePermiss == 9 && !ctx.Perm.Admin) continue;
+            if (l.ControlType is 22 or 24 or 26)
+            {
+                if (l.ButtonText is { } text) fields.Add(new ViewField(l.Field, text, "button", null, l.Span, 1, l.RowStart, null));
+                continue;
+            }
+            if (l.ControlType is 23 or 30) continue;
+            if (removed.Contains(l.Field) || IsSecret(l.Field) || !index.TryGetValue(l.Field, out var i)) continue;
+            // Caption của SY_FrmDrdwTbl đè nhãn LYT (FormControler.SetEditorArr, khi ngôn ngữ VN).
+            var dd = form.MasterDropdown(l.Field);
+            var caption = dd?.Caption ?? l.Caption ?? ctx.Form.Captions.GetValueOrDefault($"C:{l.Field}") ?? Title(ctx, "F0", l.Field);
+            fields.Add(await LookupFieldAsync(ctx, slot, dd, Field(ctx, l.Field, caption, l.ControlType, master.Types[i], row[i], l.Span, l.Rows, l.RowStart),
+                l.ControlType, value, c, tx, ct));
+        }
+        return fields;
+    }
+
+    /// <summary>
+    /// Các trang chi tiết (tài liệu 10 §4.8). Trang n gồm ô <c>LYT{n+4}</c> (ô của chứng từ) và lưới Tn. Form viết tay tách ô thành trang
+    /// riêng đứng trước lưới khi tệp mô tả có key web <c>L{n+4}V</c> = tiêu đề trang (vd hóa đơn bán: <c>L6V</c> "Công nợ &amp; Giảm giá / CK").
+    /// Lưới Tn bị ẩn theo quyền thì ô của trang cũng ẩn; không có lưới Tn thì trang chỉ có ô.
+    /// </summary>
+    private static async Task<List<ViewDetailTab>> DetailPagesAsync(Ctx ctx, FormMeta form, SlotMeta slot, SqlRows master, List<SlotMeta> visible,
+        SqlConnection c, SqlTransaction tx, CancellationToken ct)
+    {
+        var pages = new SortedDictionary<int, List<ViewField>>();
+        foreach (var g in form.Layout.Where(l => l.DetailPage > 0).GroupBy(l => l.DetailPage))
+        {
+            var fields = await LayoutFieldsAsync(ctx, form, slot, master, g, c, tx, ct);
+            if (fields.Count > 0) pages[g.Key] = fields;
+        }
+        static int PageOf(SlotMeta d) => FormMeta.SlotIds.ToList().IndexOf(d.Id.ToUpperInvariant());
+        var details = new List<ViewDetailTab>();
+        var used = new HashSet<int>();
+        for (var i = 0; i < visible.Count; i++)
+        {
+            var d = visible[i];
+            var n = PageOf(d);
+            var title = d.Caption ?? (i == 0 ? "Chi tiết" : $"Chi tiết {i + 1}");
+            List<ViewField>? merged = null;
+            if (pages.TryGetValue(n, out var pf))
+            {
+                used.Add(n);
+                if (form.Setting($"L{n + 4}V") is { } own) details.Add(new ViewDetailTab($"L{n + 4}", own, pf, Lazy: false));
+                else merged = pf;
+            }
+            details.Add(new ViewDetailTab(d.Id, title, merged));
+        }
+        // Trang có ô mà không có lưới Tn (form không khai báo Tn): trang chỉ có ô, đặt theo thứ tự trang.
+        var declared = form.Details.Select(PageOf).ToHashSet();
+        foreach (var (n, pf) in pages)
+        {
+            if (used.Contains(n) || declared.Contains(n)) continue;
+            var tab = new ViewDetailTab($"L{n + 4}", form.Setting($"L{n + 4}V") ?? (n == 1 ? "Chi tiết" : $"Chi tiết {n}"), pf, Lazy: false);
+            var at = details.FindIndex(t => t.Lazy && FormMeta.SlotIds.ToList().IndexOf(t.Id.ToUpperInvariant()) > n);
+            if (at < 0) details.Add(tab); else details.Insert(at, tab);
+        }
+        return details;
     }
 
     private static ViewField Field(Ctx ctx, string field, string caption, int controlType, Type type, object? value, int span, int rows, bool rowStart)

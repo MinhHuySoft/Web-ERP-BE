@@ -48,9 +48,15 @@ public static class SampleScreens
                 new ViewField("Price", "Giá", "money", 1234567.5m, 8, 1, true, 0),
                 new ViewField("ObjectID", "Nhà cung cấp", "lookup", "NCC01", 12, 1, false, null, Text: "Công ty A", LookupParas: ["HN"]),
                 new ViewField("Notes", "Ghi chú <dài>", "textarea", "Dòng 1\nDòng 2", 40, 2, true, null),
+                new ViewField("StatusButtonCtl_1", "Chuyển trạng thái", "button", null, 3, 1, false, null),
             ]),
         ],
-        [new ViewDetailTab("T1", "Hàng hóa đề nghị")]);
+        [
+            // Trang chi tiết 1: ô LYT5 đứng trước lưới T1; trang riêng chỉ có ô (key web L6V của form viết tay).
+            new ViewDetailTab("T1", "Hàng hóa đề nghị", [new ViewField("PaymentTermID", "Hạn thanh toán", "text", "30N", 6, 1, true, null)]),
+            new ViewDetailTab("L6", "Công nợ & Giảm giá / CK",
+                [new ViewField("DueDate", "Ngày đến hạn", "date", new DateTime(2026, 12, 9, 0, 0, 0, DateTimeKind.Unspecified), 5, 1, true, null)], Lazy: false),
+        ]);
 
     /// <summary>Hộp thoại thực hiện của WinForms (vd sao lưu): chỉ mô tả + nút khóa.</summary>
     public static ListView Dialog() => new(ScreenStatus.Ok, MetadataCompiler.Compile("BackupDataFrm", "BackupDataFrm",

@@ -18,7 +18,7 @@
 | **M0** | Repo, solution 6 project, CI build + test, quy tắc (`AGENTS.md`, `.gitignore`) | Không | Xong 2026-11-12 |
 | **M1** | Vỏ chạy được: cấu hình SQLite + CLI quản trị, nhận diện công ty theo domain, đăng nhập tài khoản ERP, cookie, `session`, `menu`, `home`, màn chưa hỗ trợ, `/health`, contract test, CD qua runner trên VPS | Không | Xong 2026-11-12; chạy trên VPS từ 2026-11-12 (erp / quantri.finora.io.vn) |
 | M2 | Màn danh sách chỉ đọc: biên dịch metadata `SY_FrmLstTbl` / `SY_FrmCfg` (GD2, HDE, LYT), lọc, lưới, tra cứu F4. Pilot `AP_PurposeRequestListFrm` (`CS_ReceiptFrm` là form viết tay, không có metadata) | Không | Phần chính xong 2026-11-12 (123/127 form metadata của Medcom); tên thay mã, F4, phân trang xong 2026-11-13; còn ô lọc kiểu khác |
-| M3 | Xem chứng từ (`EDIT` `data-mode="view"`), tab chi tiết nạp lười, quyền form (`GetPermission`), ẩn cột tiền | Không | Phần chính xong 2026-11-12; 16 form chứng từ viết tay (2026-11-12) và 30 form viết tay còn lại (2026-11-13) xem được; in theo mẫu có từ 2026-11-13 (M6) |
+| M3 | Xem chứng từ (`EDIT` `data-mode="view"`), tab chi tiết nạp lười, quyền form (`GetPermission`), ẩn cột tiền | Không | Phần chính xong 2026-11-12; 16 form chứng từ viết tay (2026-11-12) và 30 form viết tay còn lại (2026-11-13) xem được; in theo mẫu có từ 2026-11-13 (M6); ô trên trang chi tiết (`LYT5…13`) và nút user control (khóa) như ERP xong 2026-11-13 |
 | M4 | Ghi: migration schema `web`, `SavePipeline` (journal `__idem`, `isLock`, khóa sổ, `DateUpdate` → 409, số chứng từ, `UserAutoID`, XML hook, `Msg/MsgType`), `SY_UserLog`, mã công ty trong form | **Có** | Đang làm: CQ-01 chốt 2026-11-13 (bản sao MedData trên z4); P0 nền xong 2026-11-13 |
 | M5 | Trang quản trị trên web (TOTP), chế độ bảo trì, đăng xuất cả công ty từ web, hằng mật khẩu ERP đặt trên web | Không | Xong phần chính 2026-11-12; còn thu hồi phiên theo từng user (cần schema `web`, M4) |
 | M6 | Báo cáo (`*ReportStp`), mẫu in như ActiveReports, xuất Excel, đính kèm có kiểm quyền | Không | In theo mẫu (GĐ1) và trình thiết kế + kho mẫu web (GĐ2) xong 2026-11-13; còn màn báo cáo menu, Excel, đính kèm, GĐ3 mẫu in |
@@ -139,6 +139,8 @@ Xem [deploy/README.md](../deploy/README.md). Tóm tắt:
 - Key web mới của tệp mô tả:
   - `formType: "DIALOG"`: hộp thoại thực hiện (sao lưu, phục hồi, đổi mật khẩu, tính giá): mô tả `WNOTE` (đoạn cách `|`), lưới T0 nếu có;
   - `WACT`: nút thực hiện riêng của form, hiện như ERP nhưng **khóa** (web chưa ghi, M4);
+  - `L{n}V` (n = 5…13): tiêu đề trang riêng cho ô `LYT{n}` của form viết tay, đặt trước lưới T{n−4} (vd hóa đơn bán
+    `L6V` = "Công nợ & Giảm giá / CK"); không có key này thì ô `LYT5…13` nằm cùng trang với lưới T1…T9 như engine;
   - `IND` = 1: tab không nối chứng từ, hiện dưới lưới danh sách (vd mọi quý / mọi kỳ của lịch tài chính);
   - `GCA`: cột nhóm mặc định (`data-group-by`, key cũ `TableInfoX.GroupColumnArr`); `FRM`: FROM thay thế (bảng dẫn xuất gộp nhóm);
   - `flt`: ô lọc viết cứng trong form (cột như `SY_FrmFltTbl`), vd ô "Mẫu" của thiết lập báo cáo tài chính;

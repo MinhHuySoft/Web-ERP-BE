@@ -24,6 +24,19 @@ public sealed record FrmDrdwRow(string? GridName, string? ColumnID, string? Type
 public static class MetadataCompiler
 {
     private static readonly string[] MasterTabs = ["1", "2", "3", "A", "B", "C"];
+    /// <summary>Trang chi tiết 1…9 (<c>LYT5…LYT13</c>, cùng trang với lưới T1…T9).</summary>
+    private static readonly string[] DetailTabs = ["5", "6", "7", "8", "9", "10", "11", "12", "13"];
+
+    /// <summary>
+    /// User control (ControlType 22) dạng nút và chữ mặc định khi cấu hình không ghi chữ (chữ của control trong WinForms).
+    /// Control khác (lưới con, đính kèm ảnh/tệp, ô quét mã, trạng thái chứng từ…) web chưa có, bỏ qua như trước.
+    /// </summary>
+    private static readonly Dictionary<string, string?> ButtonControls = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["StatusButtonCtl"] = "Chuyển trạng thái", ["ViettelPostCtl"] = "VIETEL POST", ["PrintButtonCtl"] = "In",
+        ["CommandButtonCtl"] = null, ["ExecSQLWithParaButtonCtl"] = null, ["DataEditorButtonCtl"] = null, ["AddNewCFButtonCtl"] = null,
+        ["ShowFormButtonCtl"] = null, ["GridColumnClickEventButtonCtl"] = null, ["WebLinkViewerCtl"] = null,
+    };
 
     public static FormMeta Compile(string formName, string runtimeName, FrmLstRow? lst, IReadOnlyList<FrmCfgRow> cfg, IReadOnlyList<FrmFltRow> filters)
     {
@@ -131,8 +144,9 @@ public static class MetadataCompiler
             .ToList();
 
     /// <summary>
-    /// <c>LYT{tab}</c> của các tab master 1,2,3,A,B,C (tài liệu 10 §4.7): chuỗi 21 vị trí tách bằng <c>;</c>, trong đó <c>:</c> thay cho <c>;</c>.
-    /// Ô trong nhóm (<c>LYT{tab}{Nhóm}</c>) được trải phẳng vào chỗ của nhóm.
+    /// <c>LYT{tab}</c> của các tab master 1,2,3,A,B,C và trang chi tiết 5…13 (tài liệu 10 §4.7–4.8): chuỗi 21 vị trí tách bằng <c>;</c>,
+    /// trong đó <c>:</c> thay cho <c>;</c>. Ô trong nhóm (<c>LYT{tab}{Nhóm}</c>) được trải phẳng vào chỗ của nhóm.
+    /// Chữ trên nút user control lấy ở <c>LYS{tab}</c> (SubID = tên control): <c>BT</c> chữ nút, <c>LT</c> chữ liên kết.
     /// </summary>
     private static List<LayoutFieldMeta> Layout(IReadOnlyList<FrmCfgRow> cfg)
     {
@@ -140,8 +154,14 @@ public static class MetadataCompiler
             .GroupBy(r => r.KeyID[3..], StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.GroupBy(r => r.SubID!, StringComparer.OrdinalIgnoreCase).Select(x => x.First())
                 .OrderBy(r => r.SubValue ?? "", StringComparer.Ordinal).ToList(), StringComparer.OrdinalIgnoreCase);
+        var props = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var r in cfg)
+        {
+            if (!r.KeyID.StartsWith("LYS", StringComparison.OrdinalIgnoreCase) || string.IsNullOrEmpty(r.SubID) || string.IsNullOrWhiteSpace(r.KeyValue)) continue;
+            if (r.SubValue is "BT" or "LT") props.TryAdd($"{r.KeyID[3..]}|{r.SubID}|{r.SubValue}", r.KeyValue.Trim());
+        }
         var result = new List<LayoutFieldMeta>();
-        foreach (var tab in MasterTabs)
+        foreach (var tab in MasterTabs.Concat(DetailTabs))
         {
             if (!byKey.TryGetValue(tab, out var rows)) continue;
             Add(tab, tab, rows, 0);
@@ -152,7 +172,7 @@ public static class MetadataCompiler
         {
             foreach (var r in rows)
             {
-                var item = Item(tab, r);
+                var item = Item(tab, key, r, props);
                 if (item is null) continue;
                 if (item.ControlType == 23)
                 {
@@ -164,7 +184,7 @@ public static class MetadataCompiler
         }
     }
 
-    private static LayoutFieldMeta? Item(string tab, FrmCfgRow r)
+    private static LayoutFieldMeta? Item(string tab, string key, FrmCfgRow r, Dictionary<string, string> props)
     {
         var p = (r.KeyValue ?? "").Split(';');
         string At(int i) => i < p.Length ? p[i] : "";
@@ -173,9 +193,33 @@ public static class MetadataCompiler
         var sizeX = Int(1, 3);
         var span = sizeX is 99 or 0 or > 40 ? 40 : Math.Max(sizeX, 2);
         var caption = At(7).Replace(':', ';').Trim();
-        return new LayoutFieldMeta(tab, r.SubID!, r.SubValue ?? "", Int(0, 1), span, Math.Clamp(Int(2, 1), 1, 16), At(3) == "1", At(4) == "1",
-            caption.Length == 0 ? null : caption, false, Int(9, 0));
+        var type = Int(0, 1);
+        return new LayoutFieldMeta(tab, r.SubID!, r.SubValue ?? "", type, span, Math.Clamp(Int(2, 1), 1, 16), At(3) == "1", At(4) == "1",
+            caption.Length == 0 ? null : caption, false, Int(9, 0), ButtonText(type, r.SubID!, caption, key, props));
     }
+
+    /// <summary>
+    /// Chữ trên nút: ButtonX (26), ButtonMenuX (24) lấy caption LYT; user control dạng nút (22) lấy caption LYT, rồi <c>LYS</c> BT / LT
+    /// của đúng control, rồi chữ mặc định của control. Tên control có hậu tố <c>_1</c>, <c>_2</c>… khi form có nhiều control cùng loại.
+    /// </summary>
+    internal static string? ButtonText(int type, string name, string caption, string key, IReadOnlyDictionary<string, string> props)
+    {
+        if (type is 24 or 26) return caption.Length > 0 ? caption : null;
+        if (type != 22) return null;
+        var baseName = System.Text.RegularExpressions.Regex.Replace(name, @"_\d+$", "");
+        if (!ButtonControls.TryGetValue(baseName, out var fallback)) return null;
+        if (caption.Length > 0) return caption;
+        // LYS theo tab gốc (phần số/chữ đầu của khóa nhóm, vd "1GroupBox1" → "1").
+        foreach (var k in new[] { key, LeadingTab(key) })
+        {
+            if (props.TryGetValue($"{k}|{name}|BT", out var bt)) return bt;
+            if (props.TryGetValue($"{k}|{name}|LT", out var lt)) return lt;
+        }
+        return fallback;
+    }
+
+    private static string LeadingTab(string key) =>
+        key.Length > 1 && char.IsAsciiDigit(key[0]) && char.IsAsciiDigit(key[1]) ? key[..2] : key[..1];
 
     internal static IReadOnlyList<string> List(string? value) =>
         string.IsNullOrWhiteSpace(value) ? [] : value.Split([';', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
