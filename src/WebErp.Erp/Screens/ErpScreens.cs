@@ -571,9 +571,11 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
             var n = names[i];
             if (removed.Contains(n) || types[i] == typeof(byte[]) || IsSecret(n)) continue;
             var (kind, decimals) = Kind(ctx, n, types[i], amount.Contains(n));
-            // SY_FrmDrdwTbl của lưới: Caption đổi tiêu đề, isInvisible ẩn cột (SetDropdownFromConfig).
+            // Tiêu đề: "Ngôn ngữ form" của khách (SY_FrmCtrTbl G) → Caption của SY_FrmDrdwTbl (SetDropdownFromConfig) → F-key → SY_FmtFldTbl.
+            // isInvisible của SY_FrmDrdwTbl ẩn cột.
             var dd = ctx.Form.GridDropdown(slot, n);
-            result.Add((i, new ViewColumn(n, dd?.Caption ?? Title(ctx, formatKey, n), kind, decimals,
+            var own = FormMeta.GridNames(slot).Select(g => ctx.Form.Captions.GetValueOrDefault($"G:{g};{n}")).FirstOrDefault(x => x is not null);
+            result.Add((i, new ViewColumn(n, own ?? dd?.Caption ?? Title(ctx, formatKey, n), kind, decimals,
                 hidden.Contains(n) || shown?.Contains(n) == false || dd?.Invisible == true,
                 sum.Contains(n) && kind is "number" or "money" or "quantity" or "percent")));
         }

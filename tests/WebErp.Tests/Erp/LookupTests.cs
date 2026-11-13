@@ -71,6 +71,8 @@ public sealed class LookupTests
             ]),
         };
         Assert.Equal("Tình trạng", form.GridDropdown(form.Slots["T0"], "StatusID")?.Caption);
+        var withCtr = MetadataCompiler.Compile("F", "F", null, [new("T0", "TN", "A", null), new("T0", "PK", "ID", null), new("G", "grdListDoc;PurposeID", "Mục đích", "CV")], []);
+        Assert.Equal("Mục đích", withCtr.Captions["G:grdListDoc;PurposeID"]);
         Assert.True(form.GridDropdown(form.Slots["TA"], "ItemID")?.Invisible);
         Assert.Equal("VATName", form.GridDropdown(form.Slots["T2"], "VATID")?.NameColumn);
         Assert.Null(form.GridDropdown(form.Slots["T1"], "StatusID"));
