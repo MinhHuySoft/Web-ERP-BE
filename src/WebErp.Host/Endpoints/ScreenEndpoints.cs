@@ -57,7 +57,7 @@ public static partial class ScreenEndpoints
         return v.Status switch
         {
             ScreenStatus.Ok => HtmlResults.Page(MetaScreens.List(v, o.Node!.Entry.Caption, o.Node.Entry.MenuId, Urls(ctx, o.Node))),
-            _ => Fallback(v.Status, o.Node!, v.Note),
+            _ => Fallback(ctx, v.Status, o.Node!, v.Note),
         };
     }
 
@@ -67,7 +67,7 @@ public static partial class ScreenEndpoints
         var o = await OpenAsync(ctx, formName, para, menu, time);
         if (o.Stop is not null) return o.Stop;
         var v = await screens.OpenRecordAsync(Request(ctx, o.Node!, new Dictionary<string, string>()), Key(key), ctx.RequestAborted);
-        if (v.Status != ScreenStatus.Ok) return Fallback(v.Status, o.Node!, v.Note);
+        if (v.Status != ScreenStatus.Ok) return Fallback(ctx, v.Status, o.Node!, v.Note);
         var tokens = af.GetAndStoreTokens(ctx);
         return HtmlResults.Page(MetaScreens.Record(v, o.Node!.Entry.Caption, o.Node.Entry.MenuId, Urls(ctx, o.Node), tokens.FormFieldName, tokens.RequestToken!));
     }
@@ -79,7 +79,7 @@ public static partial class ScreenEndpoints
         if (o.Stop is not null) return o.Stop;
         if (!SlotPattern().IsMatch(slot)) return NotFound();
         var v = await screens.OpenDetailAsync(Request(ctx, o.Node!, new Dictionary<string, string>()), Key(key), slot, ctx.RequestAborted);
-        return v.Status == ScreenStatus.Ok ? HtmlResults.Page(MetaScreens.Detail(v, o.Node!.Entry.Caption)) : Fallback(v.Status, o.Node!, v.Note);
+        return v.Status == ScreenStatus.Ok ? HtmlResults.Page(MetaScreens.Detail(v, o.Node!.Entry.Caption)) : Fallback(ctx, v.Status, o.Node!, v.Note);
     }
 
     private static async Task<IResult> LookupAsync(HttpContext ctx, string formName, string field, string? para, string? q, MenuService menu,
@@ -96,7 +96,7 @@ public static partial class ScreenEndpoints
         {
             ScreenStatus.Ok => HtmlResults.Page(MetaScreens.Lookup(v, o.Node!.Entry.Caption)),
             ScreenStatus.Forbidden => HtmlResults.Error(StatusCodes.Status403Forbidden, "Không có quyền", ErpMessage.Error("Bạn không có quyền tra cứu ở màn hình này.")),
-            ScreenStatus.ConfigError => HtmlResults.Error(StatusCodes.Status422UnprocessableEntity, "Không tra cứu được",
+            ScreenStatus.ConfigError => LogConfigError(ctx, o.Node!, v.Note) ?? HtmlResults.Error(StatusCodes.Status422UnprocessableEntity, "Không tra cứu được",
                 ErpMessage.Error("Nguồn tra cứu của ô này có phần web chưa hỗ trợ. " + (v.Note ?? ""))),
             _ => HtmlResults.Error(StatusCodes.Status404NotFound, "Không tìm thấy", ErpMessage.Error("Ô này không có tra cứu trên web.")),
         };
@@ -139,11 +139,29 @@ public static partial class ScreenEndpoints
             Lookup: (field, paras) => u.Lookup(f, para, field, paras));
     }
 
-    private static IResult Fallback(ScreenStatus status, MenuNode node, string? note) => status switch
+    /// <summary>
+    /// Ghi cảnh báo khi cấu hình form có SQL web không chạy được, để đếm được trong Event Log (trang vẫn trả 200 để FE mở thành tab).
+    /// Chỉ ghi công ty, form, mã lỗi SQL và TraceId: thông điệp của SQL Server có thể chứa giá trị dữ liệu (vd lỗi đổi kiểu) nên bỏ.
+    /// </summary>
+    private static IResult? LogConfigError(HttpContext ctx, MenuNode node, string? note)
+    {
+        var s = ErpSession.From(ctx);
+        var reason = note ?? "";
+        var sql = reason.IndexOf("): ", StringComparison.Ordinal);
+        if (reason.Contains("(SQL ", StringComparison.Ordinal) && sql > 0) reason = reason[..(sql + 1)];
+        ctx.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("WebErp.Screens").LogWarning(
+            "Màn {Form}{Para} của công ty {Tenant} lỗi cấu hình: {Reason} (TraceId {TraceId}, đường dẫn {Path}).",
+            node.Entry.FormName, string.IsNullOrEmpty(node.Entry.Para) ? "" : "_" + node.Entry.Para, s?.Tenant.Key, reason, ctx.TraceIdentifier,
+            ctx.Request.Path.Value);
+        return null;
+    }
+
+    private static IResult Fallback(HttpContext ctx, ScreenStatus status, MenuNode node, string? note) => status switch
     {
         ScreenStatus.NotFound => HtmlResults.Error(StatusCodes.Status404NotFound, "Không tìm thấy", ErpMessage.Error("Không tìm thấy chứng từ này, hoặc bạn không được xem.")),
         ScreenStatus.Forbidden => HtmlResults.Error(StatusCodes.Status403Forbidden, "Không có quyền", ErpMessage.Error("Bạn không có quyền mở màn hình này.")),
-        ScreenStatus.ConfigError => HtmlResults.Page(MetaScreens.ConfigError(node.Entry.FormName!, node.Entry.Para, node.Entry.Caption, note ?? "")),
+        ScreenStatus.ConfigError => LogConfigError(ctx, node, note)
+            ?? HtmlResults.Page(MetaScreens.ConfigError(node.Entry.FormName!, node.Entry.Para, node.Entry.Caption, note ?? "")),
         _ => HtmlResults.Page(BasicScreens.NotAvailable(node.Entry.FormName!, node.Entry.Para, node.Kind == MenuKind.Report, node.Entry.Caption)),
     };
 
