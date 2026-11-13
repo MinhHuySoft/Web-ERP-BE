@@ -12,8 +12,10 @@ namespace WebErp.Html.Screens;
 /// <param name="Page">URL trang n của danh sách, giữ bộ lọc đang áp (chuẩn 11.5).</param>
 /// <param name="Lookup">URL tra cứu F4 của một ô (có chỗ <c>{q}</c>) theo (tên ô, giá trị tham số); null = không có tra cứu.</param>
 /// <param name="Print">URL màn in theo mẫu của một chứng từ (M6); null = form không có báo cáo in.</param>
+/// <param name="Layout">URL màn vẽ layout form (Ctrl+F12, chuẩn 15.3); null = người dùng không được vẽ.</param>
 public sealed record ScreenUrls(string Self, string? Para, Func<string, string> Record, Func<string, string, string> Detail, string Refresh,
-    Func<int, string>? Page = null, Func<string, IReadOnlyList<string>, string>? Lookup = null, Func<string, string>? Print = null);
+    Func<int, string>? Page = null, Func<string, IReadOnlyList<string>, string>? Lookup = null, Func<string, string>? Print = null,
+    string? Layout = null);
 
 /// <summary>Màn dựng từ metadata ERP: danh sách (M2), xem chứng từ và tab chi tiết (M3). Chỉ đọc.</summary>
 public static class MetaScreens
@@ -61,6 +63,8 @@ public static class MetaScreens
         {
             var tools = new List<ToolbarItem> { new("reload", "Nạp lại", Href: urls.Record(key), Target: "self", Shortcut: "F5") };
             if (urls.Print is not null) tools.Add(new ToolbarItem("print", "In", Href: urls.Print(key), Target: "tab", Shortcut: "Ctrl+P"));
+            if (urls.Layout is not null && v.CanDesignLayout)
+                tools.Add(new ToolbarItem("layout", "Vẽ layout", Href: urls.Layout, Target: "tab", Shortcut: "Ctrl+F12"));
             ToolbarRenderer.Write(w, tools);
             // Chế độ xem: mọi ô readonly / disabled (chuẩn 9). Web chưa ghi (M4) nên action là chính URL chứng từ.
             RecordRenderer.Write(w, new RecordModel(recordId, urls.Record(key), antiforgeryField, antiforgeryToken,

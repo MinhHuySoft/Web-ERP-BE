@@ -320,4 +320,64 @@ public sealed class RealTenantSmokeTests(FrontendValidator validator) : IClassFi
             failures.AddRange(issues.Select(i => $"{what}: [{i.Level}][{i.Rule}] {i.Msg} — {i.Where}"));
         }
     }
+
+    /// <summary>
+    /// CHỈ MÁY DEV, CHỈ DB THỬ NGHIỆM. Vẽ layout trên DB thật: mở bố cục form <c>WEBERP_REAL_LAYOUT_FORM</c>, lưu một thay đổi nhỏ (đổi chỗ hai ô
+    /// đầu), kiểm SY_FrmCfg + metadata, rồi khôi phục và kiểm dòng bố cục trở lại y nguyên. Ghi vào DB nên phải đặt
+    /// <c>WEBERP_REAL_ALLOW_WRITE</c> = <c>&lt;DB_NAME()&gt;@&lt;@@SERVERNAME&gt;</c> đúng DB đang nối (chống chạy nhầm vào DB khách).
+    /// </summary>
+    [Fact]
+    public async Task Layout_round_trip_on_test_copy()
+    {
+        var root = Environment.GetEnvironmentVariable("WEBERP_REAL_ROOT");
+        var formName = Environment.GetEnvironmentVariable("WEBERP_REAL_LAYOUT_FORM");
+        var allow = Environment.GetEnvironmentVariable("WEBERP_REAL_ALLOW_WRITE");
+        Assert.SkipWhen(string.IsNullOrEmpty(root) || string.IsNullOrEmpty(formName) || string.IsNullOrEmpty(allow),
+            "Chỉ chạy trên máy dev với DB thử nghiệm (WEBERP_REAL_ROOT, WEBERP_REAL_LAYOUT_FORM, WEBERP_REAL_ALLOW_WRITE).");
+        var ct = CancellationToken.None;
+        var paths = new WebErpPaths(root!);
+        var services = new ServiceCollection();
+        services.AddWebErpDataProtection(paths, null);
+        using var sp = services.BuildServiceProvider();
+        var store = new SqliteTenantStore(new ConfigDatabase(paths), new SecretProtector(sp.GetRequiredService<IDataProtectionProvider>()), TimeProvider.System);
+        var tenant = (await store.GetAsync(Environment.GetEnvironmentVariable("WEBERP_REAL_TENANT")!, ct))!;
+        var cx = new ErpConnectionFactory(store, new ErpOptions());
+        await using var c = await cx.OpenAsync(tenant, ct);
+        var target = await c.ExecuteScalarAsync<string>("SELECT DB_NAME() + '@' + @@SERVERNAME");
+        Assert.True(string.Equals(target, allow, StringComparison.OrdinalIgnoreCase), $"WEBERP_REAL_ALLOW_WRITE không khớp DB đang nối ({target}).");
+
+        var meta = new ErpMetadata(cx, TimeProvider.System);
+        var layout = new WebErp.Erp.Layout.ErpLayout(cx, meta, new ErpPermissions(cx), new ErpOptions(), TimeProvider.System);
+        var user = Environment.GetEnvironmentVariable("WEBERP_REAL_USER") ?? "Admin";
+        var parts = formName!.Split('|');
+        var req = new ScreenRequest(tenant, user, null, parts[0], parts.Length > 1 ? parts[1] : null, new Dictionary<string, string>());
+        const string Sql = "SELECT UserAutoID, KeyID, ISNULL(SubID,'') SubID, KeyValue, SubValue FROM dbo.SY_FrmCfg WHERE FID = @f AND (KeyID LIKE 'LY%' OR KeyID LIKE 'T_V') ORDER BY UserAutoID";
+        var before = (await c.QueryAsync<(string, string, string, string?, string?)>(Sql, new { f = req.RuntimeName })).ToList();
+
+        var open = await layout.OpenAsync(req, ct);
+        Assert.Equal(ScreenStatus.Ok, open.Status);
+        Assert.True(open.CanSave, open.Note ?? "Không được lưu (quyền Admin / chưa tenant migrate).");
+        using var doc = System.Text.Json.JsonDocument.Parse(open.Json!);
+        var items = doc.RootElement.GetProperty("items").EnumerateArray()
+            .Select(i => (Tab: i.GetProperty("tab").GetString()!, Group: i.GetProperty("group").GetString()!, Name: i.GetProperty("name").GetString()!,
+                Cfg: i.GetProperty("cfg").GetString()!)).ToList();
+        var first = items.FindIndex(i => i.Tab == "1" && i.Group == "");
+        var second = items.FindIndex(first + 1, i => i.Tab == "1" && i.Group == "");
+        Assert.True(first >= 0 && second > first, "Tab 1 cần ít nhất hai ô.");
+        (items[first], items[second]) = (items[second], items[first]);
+        var json = System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, object?>
+        {
+            ["$schema"] = "erp-form-layout/1", ["form"] = req.RuntimeName, ["revision"] = doc.RootElement.GetProperty("revision").GetString(),
+            ["items"] = items.Select(i => new { tab = i.Tab, group = i.Group, name = i.Name, cfg = i.Cfg }),
+        });
+        var saved = await layout.SaveAsync(req, json, "Smoke test: đổi chỗ hai ô đầu, sẽ khôi phục ngay", ct);
+        Assert.True(saved.Ok, string.Join(" | ", saved.Errors ?? []));
+        Assert.Equal(2, saved.Changed); // chỉ hai dòng đổi thứ tự
+        var form = await meta.GetFormAsync(tenant, req.FormName, req.RuntimeName, ct);
+        Assert.Equal(items[first].Name, form!.Layout.First(l => l.Tab == "1").Field);
+
+        var back = await layout.RestoreAsync(req, saved.VersionNo, "Smoke test: khôi phục", ct);
+        Assert.True(back.Ok, string.Join(" | ", back.Errors ?? []));
+        Assert.Equal(before, (await c.QueryAsync<(string, string, string, string?, string?)>(Sql, new { f = req.RuntimeName })).ToList());
+    }
 }

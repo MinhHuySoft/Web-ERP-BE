@@ -59,6 +59,15 @@ public sealed class ErpUrls(string pathBase) : IMenuUrls
     /// <summary>Lưu mẫu in (POST).</summary>
     public string PrintDesignerSave(string formName) => $"{pathBase}/erp/screens/{Uri.EscapeDataString(formName)}/print/designer/save";
 
+    /// <summary>Màn vẽ layout form (chuẩn 15.3).</summary>
+    public string Layout(string formName, string? para) => $"{pathBase}/erp/screens/{Uri.EscapeDataString(formName)}/layout" + ParaQuery(para);
+
+    /// <summary>Bố cục JSON erp-form-layout/1 của màn vẽ layout.</summary>
+    public string LayoutData(string formName, string? para) => $"{pathBase}/erp/screens/{Uri.EscapeDataString(formName)}/layout/data" + ParaQuery(para);
+
+    /// <summary>Lưu / khôi phục bố cục (POST).</summary>
+    public string LayoutSave(string formName) => $"{pathBase}/erp/screens/{Uri.EscapeDataString(formName)}/layout/save";
+
     private static string ParaQuery(string? para) => string.IsNullOrEmpty(para) ? "" : "?para=" + Uri.EscapeDataString(para);
 
     private string Screen(string kind, string formName, string? para) =>

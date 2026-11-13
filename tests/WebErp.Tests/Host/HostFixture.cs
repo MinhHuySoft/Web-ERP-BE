@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using WebErp.Config;
 using WebErp.Core.Auth;
 using WebErp.Core.Errors;
+using WebErp.Core.Layout;
 using WebErp.Core.Menu;
 using WebErp.Core.Metadata;
 using WebErp.Core.Print;
@@ -17,7 +18,7 @@ using WebErp.Tests.Support;
 namespace WebErp.Tests.Host;
 
 /// <summary>DB ERP giả trong bộ nhớ, thay cho <c>ErpUsers</c>/<c>ErpMenu</c> thật.</summary>
-public sealed class FakeErp : IErpUsers, IErpMenu, IErpScreens, IErpPrint
+public sealed class FakeErp : IErpUsers, IErpMenu, IErpScreens, IErpPrint, IErpLayout
 {
     public const string Key = "TEST01";
     public Dictionary<string, (ErpUser User, string Hash, bool Enabled)> Users { get; } = new(StringComparer.OrdinalIgnoreCase);
@@ -93,7 +94,31 @@ public sealed class FakeErp : IErpUsers, IErpMenu, IErpScreens, IErpPrint
     }
 
     public Task<RecordView> OpenRecordAsync(ScreenRequest request, string key, CancellationToken ct) =>
-        Task.FromResult(key == "PO/001" ? SampleScreens.Record(key) : new RecordView(ScreenStatus.NotFound));
+        Task.FromResult(key == "PO/001" ? SampleScreens.Record(key) with { CanDesignLayout = !CannotDesign.Contains(request.UserName) }
+            : new RecordView(ScreenStatus.NotFound));
+
+    /* ---- Vẽ layout (chuẩn 15.3) ---- */
+    public (string Json, string? Comment, int? Restore)? LastLayout { get; private set; }
+
+    public Task<LayoutDesignView> OpenAsync(ScreenRequest request, CancellationToken ct) =>
+        Task.FromResult(request.FormName != "AP_PurposeRequestListFrm" ? new LayoutDesignView(ScreenStatus.NotSupported, Note: "Form này viết tay.")
+            : new LayoutDesignView(ScreenStatus.Ok, "Đề nghị mua hàng", SampleScreens.LayoutJson, !CannotDesign.Contains(request.UserName)));
+
+    public Task<LayoutSaveResult> SaveAsync(ScreenRequest request, string json, string? comment, CancellationToken ct)
+    {
+        if (CannotDesign.Contains(request.UserName)) return Task.FromResult(new LayoutSaveResult(false, Errors: ["Chỉ người có quyền Admin trên form mới được vẽ layout."]));
+        var input = WebErp.Erp.Layout.LayoutModel.ReadInput(json);
+        if (input.Errors.Count > 0) return Task.FromResult(new LayoutSaveResult(false, Errors: input.Errors));
+        if (input.Revision == "cu") return Task.FromResult(new LayoutSaveResult(false, Errors: ["Bố cục của form đã bị đổi từ lúc bạn mở trình vẽ."], Conflict: true));
+        LastLayout = (json, comment, null);
+        return Task.FromResult(new LayoutSaveResult(true, 2, Changed: 3));
+    }
+
+    public Task<LayoutSaveResult> RestoreAsync(ScreenRequest request, int versionNo, string? comment, CancellationToken ct)
+    {
+        LastLayout = ("", comment, versionNo);
+        return Task.FromResult(new LayoutSaveResult(true, 3, Changed: 2));
+    }
 
     public Task<DetailView> OpenDetailAsync(ScreenRequest request, string key, string slotId, CancellationToken ct) =>
         Task.FromResult(slotId == "T1" ? SampleScreens.Detail() : new DetailView(ScreenStatus.NotFound));
@@ -136,7 +161,9 @@ public sealed class HostFixture : IDisposable
                 s.RemoveAll<IErpMenu>();
                 s.RemoveAll<IErpScreens>();
                 s.RemoveAll<IErpPrint>();
+                s.RemoveAll<IErpLayout>();
                 s.AddSingleton<IErpPrint>(Erp);
+                s.AddSingleton<IErpLayout>(Erp);
                 s.AddSingleton<IErpUsers>(Erp);
                 s.AddSingleton<IErpMenu>(Erp);
                 s.AddSingleton<IErpScreens>(Erp);

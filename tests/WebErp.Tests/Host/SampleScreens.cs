@@ -58,6 +58,10 @@ public static class SampleScreens
                 [new ViewField("DueDate", "Ngày đến hạn", "date", new DateTime(2026, 12, 9, 0, 0, 0, DateTimeKind.Unspecified), 5, 1, true, null)], Lazy: false),
         ]);
 
+    /// <summary>Bố cục erp-form-layout/1 của màn vẽ layout (data-layout-src).</summary>
+    public const string LayoutJson =
+        """{"$schema":"erp-form-layout/1","form":"AP_PurposeRequestListFrm","title":"Đề nghị mua hàng","revision":"r1","canSave":true,"tabs":[{"id":"1","kind":"master","captionKey":"T1V","caption":"","defaultCaption":"Thông tin chung"}],"items":[{"tab":"1","group":"","name":"PurchaseRequestID","cfg":"1;4;1;1;;;;;;;;;;;;;;;;0;0"}],"fields":[{"name":"PurchaseRequestID","type":"text","caption":"Mã đề xuất"}],"versions":[]}""";
+
     /// <summary>Hộp thoại thực hiện của WinForms (vd sao lưu): chỉ mô tả + nút khóa.</summary>
     public static ListView Dialog() => new(ScreenStatus.Ok, MetadataCompiler.Compile("BackupDataFrm", "BackupDataFrm",
         new FrmLstRow("BackupDataFrm", "DIALOG", "Sao lưu dữ liệu", null, null, null, null, null, null, null),

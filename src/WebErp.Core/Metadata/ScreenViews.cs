@@ -101,7 +101,11 @@ public sealed record RecordView(
     string? KeyField = null,
     IReadOnlyList<ViewTab>? Tabs = null,
     IReadOnlyList<ViewDetailTab>? Details = null,
-    string? Note = null);
+    string? Note = null)
+{
+    /// <summary>Người dùng được vẽ layout form này (quyền Admin trên form, bố cục đọc từ SY_FrmCfg): hiện nút "Vẽ layout" (Ctrl+F12).</summary>
+    public bool CanDesignLayout { get; init; }
+}
 
 /// <summary>Lưới của một tab chi tiết (nạp lười).</summary>
 public sealed record DetailView(
