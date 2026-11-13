@@ -1,0 +1,12 @@
+// Sao lưu dữ liệu. Nguồn: Tools.SysForm/BackupDataFrm.cs (hộp thoại thực thi: BACKUP DATABASE, tối ưu, shrink log, xuất dữ liệu).
+// Web chỉ đọc: không hiện đường dẫn máy chủ, phiên bản SQL, mật khẩu tệp sao lưu; mọi nút khóa.
+{
+  "form": "BackupDataFrm",
+  "formType": "DIALOG",
+  "caption": "Sao lưu dữ liệu",
+  "useDbConfig": false,
+  "cfg": {
+    "WNOTE": "Sao lưu cơ sở dữ liệu của công ty ra tệp trên máy chủ SQL (có thể nén, đặt mật khẩu, tải về), sắp xếp / tối ưu dữ liệu và thu gọn log.|Trên bản web, việc sao lưu do quản trị hệ thống thực hiện trên máy chủ; màn này chỉ để tham khảo.",
+    "WACT": "Sao lưu tại máy chủ;Sao lưu và tải về;Sắp xếp dữ liệu / Optimize database;Shrink log 1MB;Xuất ra file"
+  }
+}

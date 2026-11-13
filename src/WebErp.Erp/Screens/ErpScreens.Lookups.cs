@@ -26,13 +26,12 @@ public sealed partial class ErpScreens
         var d = form.MasterDropdown(field);
         if (d is null || !d.CanLookup) return new LookupView(ScreenStatus.NotFound);
         var ctx = await ContextAsync(req, form, ct);
-        if (!ctx.Perm.View) return new LookupView(ScreenStatus.Forbidden);
         text = text.Trim();
 
         if (d.IsValueList)
         {
             var list = ValueListRows(d);
-            var names = list.Count == 0 ? [] : list[0].Keys.ToList();
+            var names = list.Count == 0 ? [] : list[0].Keys.Where(n => !IsSecret(n)).ToList();
             var hits = list.Where(r => text.Length == 0 || r.Values.Any(v => v.Contains(text, StringComparison.CurrentCultureIgnoreCase))).ToList();
             var cols = names.Select(n => new ViewColumn(n, ctx.Formats.Caption(n, form.RuntimeName, form.FormName) ?? n, "text", null, false, false)).ToList();
             var shown = hits.Take(LookupMax).ToList();
@@ -55,7 +54,9 @@ public sealed partial class ErpScreens
             var textColumn = Has(d.TextColumn);
             var listed = (d.ColumnArr ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(Has).OfType<string>().ToList();
             if (listed.Count == 0) listed = new[] { value, textColumn }.OfType<string>().ToList();
-            var columns = listed.Concat([value]).Concat(textColumn is null ? [] : [textColumn]).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            var columns = listed.Concat([value]).Concat(textColumn is null ? [] : [textColumn]).Distinct(StringComparer.OrdinalIgnoreCase)
+                .Where(n => !IsSecret(n) || n.Equals(value, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (IsSecret(value) || textColumn is not null && IsSecret(textColumn)) return new LookupView(ScreenStatus.NotSupported);
 
             var q = new SlotQuery(slot, ctx.Resolve);
             var from = q.Fragment(source, $"tra cứu {d.Column}", Paras(d, Para));
@@ -103,7 +104,7 @@ public sealed partial class ErpScreens
             }
             var codes = rows.Select(r => r[i]).Where(v => ViewColumn.CodeKey(v) is { Length: > 0 })
                 .DistinctBy(v => ViewColumn.CodeKey(v)!, StringComparer.OrdinalIgnoreCase).Select(v => v!).ToList();
-            var map = await NamesAsync(ctx, slot, d, name, codes, k => master!(d.Paras[k].Field), c, tx, ct);
+            var map = IsSecret(name) ? null : await NamesAsync(ctx, slot, d, name, codes, k => master!(d.Paras[k].Field), c, tx, ct);
             result.Add((i, map is { Count: > 0 } ? col with { Type = "text", Decimals = null, Names = map } : col));
         }
         return result;
@@ -165,7 +166,7 @@ public sealed partial class ErpScreens
         Func<string, object?> master, SqlConnection c, SqlTransaction tx, CancellationToken ct)
     {
         var paras = d.Paras.Select(p => Invariant(master(p.Field))).ToList();
-        if (d.TextColumn is not { } textColumn || ViewColumn.CodeKey(value) is not { Length: > 0 } key) return (null, paras);
+        if (d.TextColumn is not { } textColumn || IsSecret(textColumn) || ViewColumn.CodeKey(value) is not { Length: > 0 } key) return (null, paras);
         var map = await NamesAsync(ctx, slot, d, textColumn, [value!], i => i < paras.Count ? paras[i] : "", c, tx, ct);
         return (map?.GetValueOrDefault(key), paras);
     }

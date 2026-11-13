@@ -1,0 +1,53 @@
+// Thiết lập ngôn ngữ hiển thị. Nguồn: Tools.SysForm/SystemLangSetupFrm.cs:713-790 (SetData 737-741, SetGrid 743-747).
+// Gần đúng: menu hiện dạng danh sách theo MenuID (WinForms dạng cây). Các lưới khác là tab độc lập (IND), mỗi tab tối đa 2.000 dòng.
+// Web không chạy 8 ALTER TABLE + 3 INSERT SY_StTbl lúc mở form.
+{
+  "form": "SystemLangSetupFrm",
+  "formType": "LIST",
+  "caption": "Thiết lập ngôn ngữ hiển thị",
+  "useDbConfig": false,
+  "cfg": {
+    "SPA2": "1",
+    "WACT": "Update;Import from XMLMultiLanguage",
+    "T0": {
+      "TN": "{Mod}_Menu",
+      "PK": "MenuID",
+      "SE": "{Mod}_Menu.MenuID, {Mod}_Menu.VN, {Mod}_Menu.EN, {Mod}_Menu.CH, {Mod}_Menu.Parent",
+      "FTX": "COALESCE({Mod}_Menu.isDisable, 0) = 0",
+      "SO": "{Mod}_Menu.MenuID",
+      "HDE": "Parent"
+    },
+    "T1": {
+      "IND": "1",
+      "TN": "SY_FmtFldTbl",
+      "PK": "AutoID",
+      "DCP": "FieldName ( Trường dữ liệu )",
+      "SO": "SY_FmtFldTbl.FieldName",
+      "HDE": "AutoID;FormName;FormatID"
+    },
+    "T2": {
+      "IND": "1",
+      "TN": "SY_StTbl",
+      "PK": "StringID",
+      "DCP": "System ( Hệ thống )",
+      "SO": "SY_StTbl.StringID",
+      "HDE": "StringParam"
+    },
+    "T3": {
+      "IND": "1",
+      "TN": "SY_FrmCtrTbl",
+      "PK": "UserAutoID",
+      "DCP": "User Form ( Theo từng form )",
+      "SE": "SY_FrmCtrTbl.UserAutoID, SY_FrmCtrTbl.FormID, SY_FrmCtrTbl.ParentCtlName, SY_FrmCtrTbl.CtlName, SY_FrmCtrTbl.CaptionVN, SY_FrmCtrTbl.CaptionEN",
+      "SO": "SY_FrmCtrTbl.FormID, SY_FrmCtrTbl.ParentCtlName"
+    },
+    "T4": {
+      "IND": "1",
+      "TN": "SY_StTbl",
+      "PK": "StringID",
+      "DCP": "Khác",
+      "FTW": "SY_StTbl.StringID IN ('SystemLanguage2', 'SystemLanguage3', 'isSystemLanguage2')",
+      "HDE": "StringParam"
+    }
+  }
+}

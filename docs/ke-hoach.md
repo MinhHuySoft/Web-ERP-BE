@@ -18,7 +18,7 @@
 | **M0** | Repo, solution 6 project, CI build + test, quy tắc (`AGENTS.md`, `.gitignore`) | Không | Xong 2026-11-12 |
 | **M1** | Vỏ chạy được: cấu hình SQLite + CLI quản trị, nhận diện công ty theo domain, đăng nhập tài khoản ERP, cookie, `session`, `menu`, `home`, màn chưa hỗ trợ, `/health`, contract test, CD qua runner trên VPS | Không | Xong 2026-11-12; chạy trên VPS từ 2026-11-12 (erp / quantri.finora.io.vn) |
 | M2 | Màn danh sách chỉ đọc: biên dịch metadata `SY_FrmLstTbl` / `SY_FrmCfg` (GD2, HDE, LYT), lọc, lưới, tra cứu F4. Pilot `AP_PurposeRequestListFrm` (`CS_ReceiptFrm` là form viết tay, không có metadata) | Không | Phần chính xong 2026-11-12 (123/127 form metadata của Medcom); tên thay mã, F4, phân trang xong 2026-11-13; còn ô lọc kiểu khác |
-| M3 | Xem chứng từ (`EDIT` `data-mode="view"`), tab chi tiết nạp lười, quyền form (`GetPermission`), ẩn cột tiền | Không | Phần chính xong 2026-11-12; còn tab Định khoản/VAT của form viết tay, in (M6) |
+| M3 | Xem chứng từ (`EDIT` `data-mode="view"`), tab chi tiết nạp lười, quyền form (`GetPermission`), ẩn cột tiền | Không | Phần chính xong 2026-11-12; 16 form chứng từ viết tay (2026-11-12) và 30 form viết tay còn lại (2026-11-13) xem được; còn in (M6) |
 | M4 | Ghi: migration schema `web`, `SavePipeline` (journal `__idem`, `isLock`, khóa sổ, `DateUpdate` → 409, số chứng từ, `UserAutoID`, XML hook, `Msg/MsgType`), `SY_UserLog`, mã công ty trong form | **Có** | Chưa; cần CQ-01 |
 | M5 | Trang quản trị trên web (TOTP), chế độ bảo trì, đăng xuất cả công ty từ web, hằng mật khẩu ERP đặt trên web | Không | Xong phần chính 2026-11-12; còn thu hồi phiên theo từng user (cần schema `web`, M4) |
 | M6 | Báo cáo (`*ReportStp`), xuất Excel, đính kèm có kiểm quyền | Không | Chưa |
@@ -127,10 +127,33 @@ Xem [deploy/README.md](../deploy/README.md). Tóm tắt:
   
   Nguồn: mã dịch ngược (số dòng ghi ở đầu mỗi tệp) + cột thật MedData. Sửa trực tiếp tệp JSON khi cần.
 - Chạy thử trên bản sao MedData: 19 biến thể theo Para đều mở được danh sách, chứng từ và tab; validator 0 lỗi.
-- Còn: 30 form viết tay trong menu Medcom (người dùng, nhóm, phân quyền, lịch tài chính, số dư đầu, CCDC, tài sản, khóa sổ…).
-  Chủ dự án chốt 2026-11-13: trang quản trị chỉ là cấu hình riêng của BE; form nào của ERP thì **giữ trên web ERP như WinForms**,
-  không bỏ, không dời sang trang quản trị (khách đang dùng). Giai đoạn chỉ đọc: xem dữ liệu; nút thực hiện (tính giá, khấu hao,
-  sao lưu…) chờ M4.
+- Chủ dự án chốt 2026-11-13: trang quản trị chỉ là cấu hình riêng của BE; form nào của ERP thì **giữ trên web ERP như WinForms**,
+  không bỏ, không dời sang trang quản trị (khách đang dùng). Xong 2026-11-13: cả 30 form viết tay còn lại trong menu Medcom, xem dưới.
+
+## 30 form viết tay hệ thống / kế toán / tài sản (2026-11-13)
+
+- Tệp mô tả cho: người dùng, nhóm, phân quyền (+ Web), lịch tài chính, thiết lập thông số, ngôn ngữ, user log, sao lưu, phục hồi,
+  đổi mật khẩu, khóa sổ, số dư đầu (hàng, công nợ, tài khoản), duyệt/khóa chứng từ, định nghĩa và phân bổ chi phí, thiết lập 3 báo
+  cáo tài chính, lý lịch / thanh lý / phân bổ CCDC, danh mục / thanh lý / khấu hao tài sản, kiểm kê, tính giá xuất kho, kết nối
+  Viettel Post. Nguồn: phân tích mã dịch ngược từng form (số dòng ghi ở đầu mỗi tệp) + cột thật MedData.
+- Key web mới của tệp mô tả:
+  - `formType: "DIALOG"`: hộp thoại thực hiện (sao lưu, phục hồi, đổi mật khẩu, tính giá): mô tả `WNOTE` (đoạn cách `|`), lưới T0 nếu có;
+  - `WACT`: nút thực hiện riêng của form, hiện như ERP nhưng **khóa** (web chưa ghi, M4);
+  - `IND` = 1: tab không nối chứng từ, hiện dưới lưới danh sách (vd mọi quý / mọi kỳ của lịch tài chính);
+  - `GCA`: cột nhóm mặc định (`data-group-by`, key cũ `TableInfoX.GroupColumnArr`); `FRM`: FROM thay thế (bảng dẫn xuất gộp nhóm);
+  - `flt`: ô lọc viết cứng trong form (cột như `SY_FrmFltTbl`), vd ô "Mẫu" của thiết lập báo cáo tài chính;
+  - `F0…F9`, `C` trong tệp mô tả = tiêu đề cột / nhãn ô; `{Mod}` trong giá trị = mã module của công ty (thay bằng chữ đã kiểm).
+- Bảo vệ dữ liệu: BE **không bao giờ** trả cột mật khẩu / token / khóa API / chuỗi kết nối / nội dung tệp đính kèm (`ErpScreens.IsSecret`),
+  dù cấu hình nào. User log che `Note` của thao tác trên form người dùng (WinForms ghi cả hash mật khẩu vào đó). Thiết lập thông số
+  che giá trị liên kết DB / máy chủ. Web không chạy các lệnh ghi mà WinForms chạy lúc MỞ form (ALTER, INSERT mặc định, sửa dữ liệu).
+- Quyền mở màn như WinForms: `MainFrm.MenuClick` không kiểm `Permiss.View`, cửa chặn là menu của người dùng (Host chỉ mở màn có
+  trong `{Module}_GetUserMenuFnc`; user `Admin` thấy mọi menu). Cờ quyền chỉ quyết định phạm vi dữ liệu.
+- Lọc như form viết tay của WinForms: không lọc người tạo ở form số dư, phiếu do SP sinh (SPA2); lọc người tạo viết cứng ở tài sản,
+  kiểm kê, định nghĩa phân bổ (FTW, kể cả khi DB có SPA2). **Chờ chủ dự án chốt:** form viết tay của WinForms không lọc chi nhánh;
+  web vẫn lọc theo chi nhánh của người dùng (chặt hơn) cho tới khi chốt.
+- Chạy thử trên bản sao MedData: 170 danh sách, 74 chứng từ, 156 tab chi tiết, 13 tab độc lập, 484 lần F4; validator 0 lỗi.
+- Gần đúng so với WinForms (ghi ở đầu từng tệp): cây menu hiện dạng danh sách (phân quyền, ngôn ngữ), phân bổ / khấu hao hiện danh
+  sách phiếu của kỳ thay cho ô chọn kỳ, duyệt chứng từ chưa có tab chi tiết theo phân hệ, tab "Daily log" của user log chưa làm.
 
 ## Tên thay mã, tra cứu F4, phân trang (2026-11-13)
 

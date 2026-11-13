@@ -1,0 +1,51 @@
+// Thiết lập bảng lưu chuyển tiền tệ. Nguồn: ERP/GJ_CashFlowSetupFrm.cs:585-615. Không đọc SY_FrmCfg.
+// Ô "Mẫu" (vStatementType Type='CF') như WinForms, mặc định QD15TT.
+{
+  "form": "GJ_CashFlowSetupFrm",
+  "formType": "EDIT",
+  "caption": "Thiết lập bảng lưu chuyển tiền tệ",
+  "useDbConfig": false,
+  "flt": [
+    {
+      "KeyID": "1",
+      "ColumnID": "GroupID",
+      "Caption": "Mẫu",
+      "Type": 3,
+      "Source": "SELECT GroupID, GroupName FROM vStatementType WHERE Type = 'CF'",
+      "ValueColumn": "GroupID",
+      "DisplayColumn": "GroupName",
+      "Operator": 0,
+      "DefaultValue": "QD15TT"
+    }
+  ],
+  "cfg": {
+    "SPA2": "1",
+    "T1V": "Chi tiết",
+    "T0": {
+      "TN": "GJ_CFSetupTbl",
+      "PK": "SetupID",
+      "SO": "GJ_CFSetupTbl.CodeID, GJ_CFSetupTbl.SetupID",
+      "HDE": "SetupID;GroupID",
+      "GD2": "CodeID;CodeName;CodeName2;Statement;Priority;IsBold;IsLeft;STT;isNotPrint"
+    },
+    "LYT1": {
+      "CodeID": "1;14;1;1;;;;Mã số",
+      "Statement": "1;14;1;;;;;Thuyết minh",
+      "CodeName": "1;40;2;1;;;;Chỉ tiêu",
+      "CodeName2": "1;40;2;1;;;;Chỉ tiêu 2",
+      "Priority": "5;13;1;1;;;;Độ ưu tiên",
+      "IsBold": "6;9;1;;;;;In đậm",
+      "IsLeft": "6;9;1;;;;;Canh trái",
+      "STT": "5;13;1;;;;;STT",
+      "isNotPrint": "6;9;1;;;;;Không in trong bc"
+    },
+    "T1": {
+      "TN": "GJ_CFSetupDetailTbl",
+      "PK": "UserAutoID",
+      "MDL": "SetupID",
+      "DCP": "Chi tiết",
+      "SO": "SumID",
+      "HDE": "SetupID"
+    }
+  }
+}

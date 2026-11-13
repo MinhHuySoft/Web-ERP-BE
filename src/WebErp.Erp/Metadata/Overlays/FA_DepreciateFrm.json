@@ -1,0 +1,63 @@
+// Trích khấu hao tài sản: phiếu GJ 'FA' theo kỳ. Nguồn: ERP/FA_DepreciateFrm.cs (như EQ_AllocateFrm), :931-962.
+// WinForms hiện đúng 1 phiếu GJ 'FA' của kỳ (ngày = cuối kỳ, theo chi nhánh); web: danh sách phiếu 'FA' trong kỳ → mở phiếu.
+// Phiếu do SP sinh nên không lọc người tạo (SPA2). Không đọc SY_FrmCfg.
+{
+  "form": "FA_DepreciateFrm",
+  "formType": "EDIT",
+  "caption": "Trích khấu hao tài sản",
+  "useDbConfig": false,
+  "cfg": {
+    "SP": "9",
+    "DFP": "DocumentDate",
+    "SPA2": "1",
+    "T1V": "Chứng từ",
+    "WACT": "Tính khấu hao;Sửa khấu hao;Xóa khấu hao;In bảng khấu hao",
+    "T0": {
+      "TN": "GJ_EntryTbl",
+      "PK": "DocumentID",
+      "EX": "CONVERT(VARCHAR(6), GJ_EntryTbl.DocumentDate, 112) AS PeriodID",
+      "FTW": "GJ_EntryTbl.EntryType = 'FA'",
+      "SO": "GJ_EntryTbl.DocumentDate, GJ_EntryTbl.DocumentID",
+      "HDE": "SearchField",
+      "ACP": "BaseTotal",
+      "GD2": "DocumentID;DocumentDate;Memo;Notes;BranchID"
+    },
+    "LYT1": {
+      "DocumentID": "1;14;1;1;;;;Số chứng từ",
+      "DocumentDate": "4;14;1;;;;;Ngày chứng từ",
+      "BranchID": "2;12;1;;;;;Chi nhanh",
+      "Memo": "1;40;1;1;;;;Diễn giải",
+      "Notes": "1;40;1;1;;;;Ghi chú"
+    },
+    "T1": {
+      "TN": "FA_AssetDepreTbl",
+      "PK": "UserAutoID",
+      "TN1": "FA_AssetTbl",
+      "TA1": "A",
+      "FKA1": "AssetID",
+      "FKB1": "AssetID",
+      "SE1": "A.AssetTypeID, A.MonthUse",
+      "MUL": "PeriodID",
+      "MDL": "PeriodID",
+      "FTW": "COALESCE({BranchID}, '') = '' OR A.BranchID = {BranchID}",
+      "DCP": "Thông tin khấu hao tài sản",
+      "SO": "FA_AssetDepreTbl.AssetID",
+      "HDE": "DocumentID;DocumentDate",
+      "SUM": "Amount;OpenDepre;DepreAmount;EndDepre;RemainAmount",
+      "ACP": "Amount;OpenDepre;DepreAmount;EndDepre;RemainAmount"
+    },
+    "T2": {
+      "TN": "GJ_EntryDetailTbl",
+      "PK": "UserAutoID",
+      "MDL": "DocumentID",
+      "DCP": "Chi tiết chứng từ kế toán",
+      "SO": "LinkItem",
+      "HDE": "DocumentID;RefDoc;RefDoc2;ObjectID2",
+      "SUM": "SourceAmount;Amount",
+      "ACP": "SourceAmount;Amount;UnitPrice;TienChietKhau1;TienChietKhau2;TienChietKhau3;TienChietKhau4;TienChietKhau5;TienChietKhau6;TienChietKhau7;TienChietKhau8;TienChietKhau9"
+    },
+    "F2": {
+      "LinkItem": "Mã phân bổ"
+    }
+  }
+}

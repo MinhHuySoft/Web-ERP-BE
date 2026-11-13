@@ -51,6 +51,19 @@ public static class SampleScreens
         ],
         [new ViewDetailTab("T1", "Hàng hóa đề nghị")]);
 
+    /// <summary>Hộp thoại thực hiện của WinForms (vd sao lưu): chỉ mô tả + nút khóa.</summary>
+    public static ListView Dialog() => new(ScreenStatus.Ok, MetadataCompiler.Compile("BackupDataFrm", "BackupDataFrm",
+        new FrmLstRow("BackupDataFrm", "DIALOG", "Sao lưu dữ liệu", null, null, null, null, null, null, null),
+        [new FrmCfgRow("WNOTE", "", "Sao lưu cơ sở dữ liệu.|Màn này chỉ để tham khảo.", null), new FrmCfgRow("WACT", "", "Sao lưu tại máy chủ;Shrink log 1MB", null)], []));
+
+    /// <summary>Danh sách có nút thực hiện khóa và tab độc lập (IND) dưới lưới.</summary>
+    public static ListView ListWithTabs() => List() with
+    {
+        Form = Form with { Settings = new Dictionary<string, string> { ["WACT"] = "Thêm năm;Xóa năm" } },
+        Tabs = [new ViewDetailTab("T1", "Quý trong năm"), new ViewDetailTab("T2", "Kỳ trong năm")],
+        GroupBy = "StatusID",
+    };
+
     /// <summary>Kết quả tra cứu F4 của ô ObjectID (cột ẩn dùng để điền trường).</summary>
     public static LookupView Lookup() => new(ScreenStatus.Ok,
         [new("ObjectID", "Mã", "text", null, false, false), new("ObjectName", "Tên", "text", null, false, false), new("TaxCode", "MST", "text", null, true, false)],

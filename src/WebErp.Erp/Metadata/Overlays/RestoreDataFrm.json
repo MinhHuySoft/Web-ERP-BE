@@ -1,0 +1,12 @@
+// Phục hồi dữ liệu. Nguồn: Tools.SysForm/RestoreDataFrm.cs (hộp thoại thực thi: RESTORE DATABASE, nạp tệp .htd).
+// Web chỉ đọc: không hiện đường dẫn, danh sách kết nối, mật khẩu tệp; mọi nút khóa.
+{
+  "form": "RestoreDataFrm",
+  "formType": "DIALOG",
+  "caption": "Phục hồi dữ liệu",
+  "useDbConfig": false,
+  "cfg": {
+    "WNOTE": "Phục hồi cơ sở dữ liệu của công ty từ tệp sao lưu trên máy chủ SQL, hoặc nạp dữ liệu từ tệp xuất (.htd).|Phục hồi ghi đè toàn bộ dữ liệu nên chỉ làm trên máy chủ, do quản trị hệ thống thực hiện; màn này chỉ để tham khảo.",
+    "WACT": "Phục hồi / Restore;Lấy từ file ( data )"
+  }
+}

@@ -117,9 +117,33 @@ public sealed class ScreenReadTests(FakeErpDatabase db) : IClassFixture<FakeErpD
     public async Task Hand_coded_and_unknown_forms_are_not_supported()
     {
         db.SkipIfUnavailable();
-        Assert.Equal(ScreenStatus.NotSupported, (await Screens().OpenListAsync(Req("ketoan", "HN", "NguoiDungFrm"), CancellationToken.None)).Status);
+        // Form viết tay chưa có tệp mô tả (không có trong menu Medcom).
+        Assert.Equal(ScreenStatus.NotSupported, (await Screens().OpenListAsync(Req("ketoan", "HN", "GJ_RefDocumentSetupfrm"), CancellationToken.None)).Status);
         // Form viết tay CÓ tệp mô tả nhưng DB giả không có bảng CS_ReceiptTbl: báo lỗi cấu hình, không ném lỗi 500.
         Assert.Equal(ScreenStatus.ConfigError, (await Screens().OpenListAsync(Req("ketoan", "HN", "CS_ReceiptFrm"), CancellationToken.None)).Status);
         Assert.Equal(ScreenStatus.NotSupported, (await Screens().OpenListAsync(Req("ketoan", "HN", "Khong_Co_Frm"), CancellationToken.None)).Status);
+    }
+
+    [Fact]
+    public async Task User_list_never_returns_password_hashes()
+    {
+        db.SkipIfUnavailable();
+        // Như WinForms: mở được nếu màn có trong menu (Host kiểm), dù nhóm có dòng quyền IsRun = 0.
+        var v = await Screens().OpenListAsync(Req("admin", null, "NguoiDungFrm"), CancellationToken.None);
+        Assert.Equal(ScreenStatus.Ok, v.Status);
+        Assert.Contains("ketoan", v.Keys!);
+        Assert.DoesNotContain(v.Columns!, c => c.Field.Contains("Password", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("Kế toán", v.Rows![v.Keys!.ToList().IndexOf("ketoan")][v.Columns!.ToList().FindIndex(c => c.Field == "UserGroupName")]);
+    }
+
+    [Fact]
+    public async Task Dialog_form_without_data_opens_with_locked_actions()
+    {
+        db.SkipIfUnavailable();
+        var v = await Screens().OpenListAsync(Req("ketoan", "HN", "BackupDataFrm"), CancellationToken.None);
+        Assert.Equal(ScreenStatus.Ok, v.Status);
+        Assert.True(v.Form!.IsDialog);
+        Assert.Null(v.Columns);
+        Assert.Contains("Sao lưu tại máy chủ", v.Form.Setting("WACT"));
     }
 }

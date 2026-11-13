@@ -77,6 +77,32 @@ public sealed class RealTenantSmokeTests(FrontendValidator validator) : IClassFi
                     lines.Add($"   {r["MenuID"]} | {r["FormName"]} | {(r.TryGetValue("Para", out var pa) ? pa : null)} | {(r.TryGetValue("VN", out var vn) ? vn : null)}");
                 continue;
             }
+            if (n.StartsWith("group:", StringComparison.Ordinal))
+            {
+                // group:Bảng:Cột — đếm số dòng theo giá trị của một cột cờ (tên kiểm bằng sys.columns, không chép dữ liệu).
+                var p = n[6..].Split(':');
+                var ok = await c.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID(@t) AND name = @c", new { t = p[0], c = p[1] });
+                lines.Add($"== {n}:");
+                if (ok == 1)
+                    foreach (var (v, k) in await c.QueryAsync<(string?, int)>($"SELECT CAST([{p[1]}] AS nvarchar(50)), COUNT(*) FROM dbo.[{p[0]}] GROUP BY [{p[1]}]"))
+                        lines.Add($"   {v ?? "NULL"} = {k}");
+                continue;
+            }
+            if (n.StartsWith("perm:", StringComparison.Ordinal))
+            {
+                // perm:User:Form — dòng quyền nhóm / riêng của người dùng trên form (chỉ cờ quyền, không dữ liệu khác).
+                var p = n[5..].Split(':');
+                var m = tenant.ModuleId.ToUpperInvariant();
+                var rows = await c.QueryAsync(
+                    $"SELECT 'G' Src, U.UserGroupID, M.MenuID, M.isNotCheckPermission, P.IsRun, P.IsAdd, P.IsUpdate, P.IsDelete, P.isManager, P.isAdmin " +
+                    $"FROM dbo.SY_User U JOIN dbo.{m}_UserGroupPermisstion P ON P.UserGroupID = U.UserGroupID JOIN dbo.{m}_Menu M ON M.MenuID = P.MenuID " +
+                    $"WHERE U.UserName = @u AND M.FormName = @f UNION ALL " +
+                    $"SELECT 'U', NULL, M.MenuID, M.isNotCheckPermission, P.IsRun, P.IsAdd, P.IsUpdate, P.IsDelete, P.isManager, P.isAdmin " +
+                    $"FROM dbo.{m}_UserPermisstion P JOIN dbo.{m}_Menu M ON M.MenuID = P.MenuID WHERE P.UserName = @u AND M.FormName = @f", new { u = p[0], f = p[1] });
+                lines.Add($"== {n}:");
+                foreach (IDictionary<string, object?> r in rows) lines.Add("   " + string.Join(" | ", r.Select(x => $"{x.Key}={x.Value}")));
+                continue;
+            }
             if (n.StartsWith("drdwfull:", StringComparison.Ordinal))
             {
                 var rows = await c.QueryAsync("SELECT * FROM dbo.SY_FrmDrdwTbl WHERE FormID = @f ORDER BY GridName, ColumnID", new { f = n[9..] });
@@ -164,6 +190,13 @@ public sealed class RealTenantSmokeTests(FrontendValidator validator) : IClassFi
             await File.WriteAllTextAsync(Path.Combine(outDir, $"{req.RuntimeName}.html"), html);
             await AssertValid(html, $"{spec} danh sách");
 
+            // Tab độc lập (IND) dưới lưới danh sách.
+            foreach (var t in list.Tabs ?? [])
+            {
+                var det = await screens.OpenDetailAsync(req, "-", t.Id, CancellationToken.None);
+                report.Add($"  tab {t.Id} {t.Title}: {det.Status} {det.Note} rows={det.Rows?.Count}");
+                if (det.Status == ScreenStatus.Ok) await AssertValid(MetaScreens.Detail(det, t.Title), $"{spec} tab {t.Id}");
+            }
             if (!list.CanOpenRecord || list.Keys is not { Count: > 0 }) continue;
             var key = list.Keys[0];
             var rec = await screens.OpenRecordAsync(req, key, CancellationToken.None);

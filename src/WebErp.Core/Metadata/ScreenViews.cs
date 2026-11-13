@@ -60,6 +60,7 @@ public enum ScreenStatus { Ok, NotSupported, NotFound, Forbidden, ConfigError }
 /// <param name="Total">Tổng số dòng khớp bộ lọc (có thể lớn hơn số dòng gửi).</param>
 /// <param name="Page">Trang đang xem (từ 1).</param>
 /// <param name="PageSize">Số dòng mỗi trang; 0 = không phân trang (slot có <c>TRS</c>: WinForms chỉ lấy top N).</param>
+/// <param name="Tabs">Tab độc lập (key <c>IND</c>) hiện dưới lưới danh sách, nạp lười (khóa chứng từ là <c>-</c>).</param>
 public sealed record ListView(
     ScreenStatus Status,
     FormMeta? Form = null,
@@ -73,7 +74,9 @@ public sealed record ListView(
     bool CanOpenRecord = false,
     string? Note = null,
     int Page = 1,
-    int PageSize = 0);
+    int PageSize = 0,
+    string? GroupBy = null,
+    IReadOnlyList<ViewDetailTab>? Tabs = null);
 
 /// <summary>Một ô của chứng từ đang xem.</summary>
 /// <param name="Control"><c>text</c>, <c>textarea</c>, <c>label</c>, <c>checkbox</c>, <c>date</c>, <c>datetime</c>, số…, hoặc <c>lookup</c>
@@ -107,7 +110,8 @@ public sealed record DetailView(
     int Total = 0,
     IReadOnlyDictionary<string, decimal>? Sums = null,
     string? KeyField = null,
-    string? Note = null);
+    string? Note = null,
+    string? GroupBy = null);
 
 /// <summary>Kết quả tra cứu F4 (chuẩn 10, <c>table[data-erp=lookup-result]</c>).</summary>
 /// <param name="Values">Giá trị gán vào ô (song song với <see cref="Rows"/>).</param>

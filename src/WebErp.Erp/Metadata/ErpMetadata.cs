@@ -52,11 +52,17 @@ public sealed class ErpMetadata(ErpConnectionFactory connections, TimeProvider t
             // Form viết tay có tệp mô tả: dùng dòng SY_FrmLstTbl của tệp (lớp viết tay luôn che dòng cùng tên trong DB). Cấu hình
             // SY_FrmCfg của DB chỉ giữ khi form viết tay có đọc nó (useDbConfig), và đứng trước để cấu hình của khách thắng.
             var para = runtimeName.Length > formName.Length + 1 ? runtimeName[(formName.Length + 1)..] : null;
+            // {Mod}: tiền tố bảng theo module của công ty ({Mod}_Menu, {Mod}_UserLog…), thay bằng CHỮ đã kiểm (chỉ chữ cái), không phải
+            // tham số, trước khi kiểm chỉ đọc. Mã module sai thì giữ nguyên để câu lỗi và màn báo lỗi cấu hình.
+            var mod = TenantNames.IsValidModule(tenant.ModuleId) ? tenant.ModuleId.ToUpperInvariant() : null;
+            string? M(string? v) => mod is not null && v is not null && v.Contains("{Mod}", StringComparison.Ordinal) ? v.Replace("{Mod}", mod, StringComparison.Ordinal) : v;
+            IReadOnlyList<FrmFltRow> overlayFilters = [];
             if (FormOverlays.Get(formName, para) is { } overlay)
             {
                 lst = overlay.Lst;
                 if (!overlay.UseDbConfig) cfg.Clear();
-                cfg.AddRange(overlay.Rows);
+                cfg.AddRange(overlay.Rows.Select(r => r with { KeyValue = M(r.KeyValue) }));
+                overlayFilters = overlay.Filters.Select(f => f with { Source = M(f.Source), WhereString = M(f.WhereString) }).ToList();
             }
             if (lst is null && cfg.Count == 0) return (FormMeta?)null;
             // Tiêu đề riêng của ô trên form (SY_FrmCtrTbl, màn "Ngôn ngữ form" của WinForms): ParentCtlName kết thúc bằng Fld<Cột>,
@@ -75,6 +81,7 @@ public sealed class ErpMetadata(ErpConnectionFactory connections, TimeProvider t
             var flt = (await c.QueryAsync<FrmFltRow>(Cmd(
                 "SELECT KeyID,ColumnID,Caption,Type,Source,ValueColumn,DisplayColumn,Operator,WhereString,DefaultValue,IsDisable " +
                 "FROM dbo.SY_FrmFltTbl WHERE FormID=@f ORDER BY KeyID,UserAutoID", runtimeName, ct))).ToList();
+            flt.AddRange(overlayFilters);
             // Tra cứu / danh sách chọn (SY_FrmDrdwTbl): DB cũ có thể thiếu vài cột (DisplayMember2, isInvisible) nên đọc mềm theo tên.
             var drdw = new List<FrmDrdwRow>();
             if (await c.ExecuteScalarAsync<int>(new CommandDefinition("SELECT CASE WHEN OBJECT_ID('dbo.SY_FrmDrdwTbl') IS NULL THEN 0 ELSE 1 END", cancellationToken: ct)) == 1)

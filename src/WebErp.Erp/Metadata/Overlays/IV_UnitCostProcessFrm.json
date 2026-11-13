@@ -1,0 +1,26 @@
+// Tính giá xuất kho. Nguồn: ERP/IV_UnitCostProcessFrm.cs:913-1225 (hộp thoại xử lý, không có lưới).
+// Web chỉ đọc: hiện phương pháp tính giá đang dùng (SY_InitSetup.CostMethod); các nút tính giá khóa.
+{
+  "form": "IV_UnitCostProcessFrm",
+  "formType": "DIALOG",
+  "caption": "Tính giá xuất kho",
+  "useDbConfig": false,
+  "cfg": {
+    "SPA2": "1",
+    "WNOTE": "Tính giá xuất kho theo tháng (từ kỳ – đến kỳ, theo vật tư / chi nhánh, số vòng chuyển kho) hoặc theo quý / năm, theo phương pháp tính giá đã thiết lập.|Tính giá ghi lại giá vốn của các phiếu xuất nên sẽ dùng được khi web có chức năng ghi dữ liệu.",
+    "WACT": "Tính giá;Tính giá (quý);Tính giá (năm)",
+    "T0": {
+      "TN": "SY_InitSetup",
+      "PK": "PeriodID",
+      "SE": "SY_InitSetup.PeriodID, SY_InitSetup.BalancePeriodID, SY_InitSetup.CostMethod",
+      "EX": "CASE SY_InitSetup.CostMethod WHEN 'AVG' THEN N'Tính giá bình quân cuối kỳ' WHEN 'AVGD' THEN N'Tính giá bình quân theo ngày' WHEN 'AVGS' THEN N'Bình quân cuối kỳ (theo kho )' WHEN 'FIFO' THEN N'Tính giá nhập trước xuất trước' WHEN 'LOT' THEN N'Tính giá đích danh theo lô' ELSE SY_InitSetup.CostMethod END AS CostMethodName",
+      "TRS": "1"
+    },
+    "F0": {
+      "PeriodID": "Kỳ bắt đầu hạch toán",
+      "BalancePeriodID": "Kỳ bắt đầu sử dụng",
+      "CostMethod": "Mã phương pháp",
+      "CostMethodName": "Phương pháp tính giá"
+    }
+  }
+}

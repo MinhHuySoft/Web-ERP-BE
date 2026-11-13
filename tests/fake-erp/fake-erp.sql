@@ -9,7 +9,8 @@ CREATE TABLE dbo.SY_UserGroup (
 CREATE TABLE dbo.SY_User (
   UserName varchar(100) NOT NULL PRIMARY KEY, HoTen nvarchar(150) NOT NULL, TenNgan nvarchar(100) NOT NULL DEFAULT N'',
   [Password] varchar(200) NULL, [Disable] bit NOT NULL DEFAULT 0, UserGroupID varchar(50) NULL, UserAuthority varchar(100) NULL,
-  BranchID varchar(50) NULL);
+  BranchID varchar(50) NULL, Manager bit NULL, PM bit NULL, CeoID varchar(50) NULL, ManagerID varchar(50) NULL, EmployeeID varchar(50) NULL,
+  CostCenterID varchar(50) NULL, StoreHouseID varchar(50) NULL, StartupForm varchar(100) NULL);
 
 CREATE TABLE dbo.SY_Menu (
   MenuID varchar(50) NOT NULL PRIMARY KEY, VN nvarchar(200) NULL, EN nvarchar(200) NULL, CH nvarchar(200) NULL, MenuType int NOT NULL DEFAULT 0,

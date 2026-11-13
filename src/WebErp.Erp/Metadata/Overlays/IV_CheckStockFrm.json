@@ -1,0 +1,35 @@
+// Kiểm kê hàng hóa. Nguồn: ERP/IV_CheckStockFrm.cs:826-942. Form đọc T0.FTX + thiết lập hiển thị T0/T1 của SY_FrmCfg.
+// WinForms luôn lọc người tạo với user thường (FTW), kể cả khi DB có SPA2.
+// Lọc chi nhánh: WinForms không lọc ở form này; web vẫn lọc theo chi nhánh của người dùng (chờ chủ dự án chốt SPA3).
+{
+  "form": "IV_CheckStockFrm",
+  "formType": "EDIT",
+  "caption": "Kiểm kê hàng hóa",
+  "useDbConfig": true,
+  "cfg": {
+    "SP": "9",
+    "DFP": "DocumentDate",
+    "WACT": "Lấy tồn kho;Tạo phiếu nhập xuất điều chỉnh",
+    "T0": {
+      "TN": "IV_CheckStockTbl",
+      "PK": "DocumentID",
+      "SO": "IV_CheckStockTbl.DocumentDate, IV_CheckStockTbl.DocumentID",
+      "HDE": "SearchField",
+      "FTW": "({ISMANAGER} = 1 OR IV_CheckStockTbl.UserCreate = {USER})"
+    },
+    "T1": {
+      "TN": "IV_CheckStockDetailTbl",
+      "PK": "UserAutoID",
+      "MDL": "DocumentID",
+      "DCP": "Chi tiết hàng",
+      "TN1": "CF_ItemTbl",
+      "TA1": "I",
+      "FKA1": "ItemID",
+      "FKB1": "ItemID",
+      "SE1": "I.ItemName, I.Unit, I.Unit2",
+      "SO": "IV_CheckStockDetailTbl.UserAutoID",
+      "HDE": "DocumentID",
+      "SUM": "CheckQuantity;StockQuantity;DiffQuantity"
+    }
+  }
+}

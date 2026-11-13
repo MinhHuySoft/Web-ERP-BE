@@ -1,0 +1,39 @@
+// User log. Nguồn: Tools.SysForm/UserLogFrm.cs:610-692 (SetData 618-619, TopRecord 648, ẩn log System 691).
+// Che Note của thao tác trên form người dùng: WinForms ghi mọi giá trị cột của dòng (kể cả hash mật khẩu) vào Note
+// (Tools/FormControler.cs:2805-2849). Không bao giờ lấy DataValue (XML cả bản ghi). Tab "Daily log" chưa làm.
+{
+  "form": "UserLogFrm",
+  "formType": "EDIT",
+  "caption": "User log",
+  "useDbConfig": false,
+  "cfg": {
+    "SPA2": "1",
+    "T0": {
+      "TN": "{Mod}_UserLog",
+      "PK": "UserAutoID",
+      "TN1": "SY_User",
+      "TA1": "U",
+      "FKA1": "UserName",
+      "FKB1": "UserName",
+      "SE1": "U.HoTen",
+      "EX": "CONVERT(VARCHAR(10), {Mod}_UserLog.LoginDate, 111) AS LogDay",
+      "SO": "{Mod}_UserLog.LoginDate DESC",
+      "TRS": "500",
+      "HDE": "SPID",
+      "GD2": "ComputerName;UserName;HoTen;LoginDate;LogoutDate;AppVer;LogDay"
+    },
+    "T1": {
+      "TN": "{Mod}_UserLogDetail",
+      "PK": "UserAutoID",
+      "MUL": "UserAutoID",
+      "MDL": "LogID",
+      "DCP": "Chức năng",
+      "SE": "{Mod}_UserLogDetail.UserAutoID, {Mod}_UserLogDetail.LogID, {Mod}_UserLogDetail.FormID, {Mod}_UserLogDetail.Para, {Mod}_UserLogDetail.LogDate",
+      "EX": "CASE WHEN {Mod}_UserLogDetail.FormKey LIKE '%NguoiDungFrm' OR {Mod}_UserLogDetail.FormKey LIKE '%ChangePasswordFrm' THEN NULL ELSE {Mod}_UserLogDetail.Note END AS Note, COALESCE((SELECT MAX(M.VN) FROM {Mod}_Menu M WHERE (COALESCE(M.Para, '') = '' AND M.FormName = {Mod}_UserLogDetail.FormID) OR (COALESCE(M.Para, '') <> '' AND M.FormName + '_' + M.Para = {Mod}_UserLogDetail.FormID)), {Mod}_UserLogDetail.FormID) AS VN",
+      "FTX": "{Mod}_UserLogDetail.FormID <> 'System'",
+      "SO": "{Mod}_UserLogDetail.LogDate DESC",
+      "HDE": "LogID;FormID",
+      "GD2": "LogDate;VN;Para;Note"
+    }
+  }
+}

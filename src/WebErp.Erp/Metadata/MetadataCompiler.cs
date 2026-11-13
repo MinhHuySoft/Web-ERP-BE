@@ -103,6 +103,9 @@ public static class MetadataCompiler
             HideOnHideAmount = Get("HHA") == "1",
             Optional = Get("OPT") == "1",
             GridName = Get("GN"),
+            FromOverride = Get("FRM"),
+            Independent = Get("IND") == "1",
+            GroupBy = Get("GCA"),
         };
     }
 

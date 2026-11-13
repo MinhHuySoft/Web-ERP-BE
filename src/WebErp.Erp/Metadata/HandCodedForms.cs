@@ -2,7 +2,8 @@ namespace WebErp.Erp.Metadata;
 
 /// <summary>
 /// Form viết tay của WinForms (tài liệu 30 §1, 49 form ở Medcom). Lớp viết tay luôn che dòng <c>SY_FrmLstTbl</c> cùng tên, nên
-/// web không dựng chúng từ metadata (dữ liệu nạp bằng code riêng); các form này làm riêng ở mốc sau.
+/// web không dựng chúng từ metadata (dữ liệu nạp bằng code riêng). Form có tệp mô tả (<see cref="FormOverlays"/>) thì dựng theo tệp;
+/// không có thì là màn "chưa có trên web".
 /// </summary>
 public static class HandCodedForms
 {

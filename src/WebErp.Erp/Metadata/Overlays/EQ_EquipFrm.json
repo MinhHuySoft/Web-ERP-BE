@@ -1,0 +1,95 @@
+// Lý lịch công cụ dụng cụ. Nguồn: ERP/EQ_EquipFrm.cs:1588-1700. Dữ liệu viết cứng; LoadLayout chỉ cho thiết lập hiển thị.
+// Tệp đính kèm: chỉ siêu dữ liệu (không Content/Base64Content). Web không chạy UPDATE/ALTER/CREATE TABLE lúc mở form.
+// Lọc chi nhánh: WinForms không lọc ở form này; web vẫn lọc theo chi nhánh của người dùng (chờ chủ dự án chốt SPA3).
+{
+  "form": "EQ_EquipFrm",
+  "formType": "EDIT",
+  "caption": "Lý lịch công cụ dụng cụ",
+  "useDbConfig": false,
+  "cfg": {
+    "WACT": "Tạo phân bổ hàng tháng thủ công",
+    "T0": {
+      "TN": "EQ_EquipTbl",
+      "PK": "EquipID",
+      "EX": "Year(EQ_EquipTbl.NgayChungTu) as Nam",
+      "SO": "EQ_EquipTbl.AllocateDate desc, EQ_EquipTbl.EquipID",
+      "SUM": "Amount;OpenAllocate",
+      "ACP": "Amount;OpenAllocate",
+      "GD2": "EquipID;EquipName;Amount;AllocateDate;Quantity;MonthUse;InvAccID;AccountID;ExpenseAccID;EquipGroupID;RefItemID;OpenAllocate;CostCenterID;CostID;ObjectID;StopDate;Notes;DepartmentID;RefDoc;RefSourceID;Unit;LiquidationDate;BranchID"
+    },
+    "T1": {
+      "TN": "EQ_EquipPeriodSetupTbl",
+      "PK": "UserAutoID",
+      "MDL": "EquipID",
+      "DCP": "Thiết lập các kỳ phân bổ",
+      "SO": "PeriodID",
+      "HDE": "EquipID",
+      "SUM": "FixAllocateAmount",
+      "ACP": "FixAllocateAmount",
+      "OPT": "1"
+    },
+    "T2": {
+      "TN": "EQ_EquipDepreTbl",
+      "PK": "UserAutoID",
+      "MDL": "EquipID",
+      "DCP": "Thông tin đã khấu hao",
+      "SO": "DocumentDate",
+      "HDE": "EquipID;EquipName;Amount",
+      "SUM": "PeriodAmount",
+      "ACP": "Amount;OpenAllocate;PeriodAmount;EndAllocate;RemainAmount"
+    },
+    "T3": {
+      "TN": "EQ_MoveDetailTbl",
+      "PK": "UserAutoID",
+      "MDL": "EquipID",
+      "DCP": "Quá trình di chuyển",
+      "TN1": "EQ_MoveTbl",
+      "TA1": "M",
+      "FKA1": "DocumentID",
+      "FKB1": "DocumentID",
+      "IJ1": "1",
+      "SE1": "M.DocumentDate",
+      "SO": "M.DocumentDate desc",
+      "HDE": "EquipID",
+      "SUM": "Quantity"
+    },
+    "T4": {
+      "TN": "EQ_RepairDetailTbl",
+      "PK": "UserAutoID",
+      "MDL": "EquipID",
+      "DCP": "Sửa chữa bảo trì",
+      "TN1": "EQ_RepairTbl",
+      "TA1": "R",
+      "FKA1": "DocumentID",
+      "FKB1": "DocumentID",
+      "IJ1": "1",
+      "SE1": "R.DocumentDate",
+      "SO": "R.DocumentDate desc",
+      "HDE": "EquipID",
+      "SUM": "Quantity;Amount",
+      "ACP": "Amount"
+    },
+    "T5": {
+      "TN": "EQ_EquipAttachTbl",
+      "PK": "UserAutoID",
+      "MDL": "EquipID",
+      "DCP": "Hình ảnh",
+      "SE": "EQ_EquipAttachTbl.UserAutoID, EQ_EquipAttachTbl.EquipID, EQ_EquipAttachTbl.STT, EQ_EquipAttachTbl.FileName, EQ_EquipAttachTbl.FileType, EQ_EquipAttachTbl.FileSize",
+      "FTW": "EQ_EquipAttachTbl.STT = '1'",
+      "HDE": "EquipID",
+      "SO": "EQ_EquipAttachTbl.STT",
+      "OPT": "1"
+    },
+    "T6": {
+      "TN": "EQ_EquipAttachTbl",
+      "PK": "UserAutoID",
+      "MDL": "EquipID",
+      "DCP": "File đính kèm",
+      "SE": "EQ_EquipAttachTbl.UserAutoID, EQ_EquipAttachTbl.EquipID, EQ_EquipAttachTbl.STT, EQ_EquipAttachTbl.FileName, EQ_EquipAttachTbl.FileType, EQ_EquipAttachTbl.FileSize",
+      "FTW": "EQ_EquipAttachTbl.STT IN ('2', '3', '4')",
+      "HDE": "EquipID",
+      "SO": "EQ_EquipAttachTbl.STT",
+      "OPT": "1"
+    }
+  }
+}

@@ -1,0 +1,34 @@
+// Khai báo lịch tài chính. Nguồn: Tools.Sys/FiscalFrm.cs:545-556 (3 lưới độc lập: năm, quý, kỳ).
+// Như WinForms: lưới năm + 2 tab độc lập (IND) mọi quý, mọi kỳ. Web không chạy DELETE quý/kỳ mồ côi lúc mở form.
+{
+  "form": "FiscalFrm",
+  "formType": "LIST",
+  "caption": "Khai báo lịch tài chính",
+  "useDbConfig": false,
+  "cfg": {
+    "SPA2": "1",
+    "WACT": "Thêm năm;Sửa năm;Xóa năm",
+    "T0": {
+      "TN": "SY_Year",
+      "PK": "YearID",
+      "SE": "SY_Year.YearID, SY_Year.YearName, SY_Year.YearName2",
+      "SO": "SY_Year.YearID"
+    },
+    "T1": {
+      "IND": "1",
+      "TN": "SY_Quarter",
+      "PK": "QuarterID",
+      "DCP": "Quý trong năm",
+      "SE": "SY_Quarter.QuarterID, SY_Quarter.QuarterName, SY_Quarter.QuarterName2, SY_Quarter.FromDate, SY_Quarter.ToDate, SY_Quarter.YearID",
+      "SO": "SY_Quarter.QuarterID"
+    },
+    "T2": {
+      "IND": "1",
+      "TN": "SY_Period",
+      "PK": "PeriodID",
+      "DCP": "Kỳ trong năm",
+      "SE": "SY_Period.PeriodID, SY_Period.PeriodName, SY_Period.PeriodName2, SY_Period.FromDate, SY_Period.ToDate, SY_Period.YearID, SY_Period.isLock",
+      "SO": "SY_Period.PeriodID"
+    }
+  }
+}

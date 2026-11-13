@@ -33,7 +33,8 @@ public sealed record GridModel(
     string? Sort = null,
     int? TotalRows = null,
     IReadOnlyDictionary<string, GridCell>? Totals = null,
-    string? FooterLabel = null);
+    string? FooterLabel = null,
+    string? GroupBy = null);
 
 /// <summary><c>table[data-erp=grid]</c> (chuẩn 11). Mỗi dòng đúng số ô bằng số cột.</summary>
 public static class GridRenderer
@@ -41,7 +42,8 @@ public static class GridRenderer
     public static void Write(HtmlWriter w, GridModel g)
     {
         w.Open("table", ("data-erp", "grid"), ("data-grid-id", g.GridId), ("data-key-field", g.KeyField),
-            ("data-selectable", g.Selectable), ("data-total-rows", (g.TotalRows ?? g.Rows.Count).ToString(CultureInfo.InvariantCulture)), ("data-sort", g.Sort)).Line();
+            ("data-selectable", g.Selectable), ("data-total-rows", (g.TotalRows ?? g.Rows.Count).ToString(CultureInfo.InvariantCulture)), ("data-sort", g.Sort),
+            ("data-group-by", g.GroupBy)).Line();
         if (!string.IsNullOrEmpty(g.Caption)) w.Element("caption", g.Caption).Line();
         w.Open("thead").Open("tr");
         foreach (var c in g.Columns)

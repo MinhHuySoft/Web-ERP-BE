@@ -13,10 +13,40 @@ public sealed class FormOverlaysTests
         {
             var o = FormOverlays.Get(name, null)!.Value;
             var f = MetadataCompiler.Compile(name, name, o.Lst, o.Rows, []);
-            Assert.True(f.Master is not null, $"{name}: thiếu T0 hợp lệ (TN + PK).");
-            Assert.Equal("EDIT", f.FormType);
+            Assert.Contains(f.FormType, new[] { "EDIT", "LIST", "DIALOG" });
+            Assert.True(f.Master is not null || f.IsDialog, $"{name}: thiếu T0 hợp lệ (TN + PK).");
             Assert.True(HandCodedForms.Names.Contains(name), $"{name} không phải form viết tay: không cần tệp mô tả.");
+            // Tệp mô tả không bao giờ chọn cột bí mật (mật khẩu, token, nội dung tệp đính kèm).
+            foreach (var r in o.Rows.Where(r => r.SubID is "SE" or "EX" or "SE1" or "SE2"))
+                Assert.DoesNotMatch(@"(?i)\.(password\d*|base64content\d*|datavalue)\b", r.KeyValue ?? "");
+            foreach (var d in f.Details.Where(d => !d.Independent))
+                Assert.True(f.IsEdit, $"{name}.{d.Id}: tab chi tiết nối chứng từ chỉ có ở form EDIT.");
         }
+    }
+
+    [Fact]
+    public void Web_keys_compile_captions_independent_tabs_filters_and_module_prefix()
+    {
+        var eq = FormOverlays.Get("EQ_AllocateFrm", null)!.Value;
+        var f = MetadataCompiler.Compile("EQ_AllocateFrm", "EQ_AllocateFrm", eq.Lst, eq.Rows, []);
+        Assert.Equal("Mã phân bổ", f.Captions["F2:LinkItem"]);               // F2 trong tệp mô tả = tiêu đề cột (SubValue CV)
+        Assert.Equal("PeriodID", f.Slots["T1"].MasterField);
+
+        var fiscal = FormOverlays.Get("FiscalFrm", null)!.Value;
+        var ff = MetadataCompiler.Compile("FiscalFrm", "FiscalFrm", fiscal.Lst, fiscal.Rows, []);
+        Assert.Equal("LIST", ff.FormType);
+        Assert.True(ff.Slots["T1"].Independent && ff.Slots["T2"].Independent);
+
+        var bs = FormOverlays.Get("GJ_BalanceSheetSetupFrm", null)!.Value;
+        var fb = MetadataCompiler.Compile("GJ_BalanceSheetSetupFrm", "GJ_BalanceSheetSetupFrm", bs.Lst, bs.Rows, bs.Filters);
+        Assert.Equal(("GroupID", 3, "QD15"), (fb.Filters[0].Column, fb.Filters[0].Type, fb.Filters[0].DefaultValue));
+
+        var perm = FormOverlays.Get("NguoiDungPhanQuyenFrm", null)!.Value;
+        Assert.Contains(perm.Rows, r => r.KeyValue == "{Mod}_UserGroupPermisstion"); // ErpMetadata thay {Mod} bằng mã module đã kiểm
+        Assert.Equal("GroupName", MetadataCompiler.Compile("P", "P", perm.Lst, perm.Rows, []).Slots["T1"].GroupBy);
+
+        var lockDoc = FormOverlays.Get("SY_LockDocumentFrm", null)!.Value;
+        Assert.StartsWith("(SELECT SourceID", MetadataCompiler.Compile("L", "L", lockDoc.Lst, lockDoc.Rows, []).Slots["T1"].FromOverride);
     }
 
     [Fact]
