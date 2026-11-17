@@ -1,8 +1,11 @@
 using System.Reflection;
 using WebErp.Config;
 using WebErp.Core.Auth;
+using WebErp.Core.Metadata;
 using WebErp.Core.Tenancy;
 using WebErp.Erp.Connection;
+using WebErp.Erp.Metadata;
+using WebErp.Erp.Screens;
 using WebErp.Erp.Security;
 using WebErp.Web;
 
@@ -44,8 +47,14 @@ public static class AdminWeb
         builder.Services.AddSingleton<ErpConnectionFactory>();
         builder.Services.AddSingleton<IErpUsers, ErpUsers>();
         builder.Services.AddSingleton(sp => new HostSyncStore(sp.GetRequiredService<ConfigDatabase>(), sp.GetRequiredService<TimeProvider>()));
+        // Mô tả form cứng: kiểm trên DB công ty (chỉ đọc) và liệt kê form menu web chưa dựng được.
+        builder.Services.AddSingleton<IFormOverlayStore>(sp => sp.GetRequiredService<SqliteTenantStore>());
+        builder.Services.AddSingleton<OverlayCatalog>();
+        builder.Services.AddSingleton<ErpMetadata>();
+        builder.Services.AddSingleton<OverlayProbe>();
         builder.Services.AddScoped<TenantEndpoints.Deps>();
         builder.Services.AddScoped<DomainEndpoints.Deps>();
+        builder.Services.AddScoped<FormEndpoints.Deps>();
         builder.Services.AddAdminAuth(options);
 
         var app = builder.Build();
@@ -73,6 +82,7 @@ public static class AdminWeb
         app.MapTenants();
         app.MapDomains();
         app.MapSettings();
+        app.MapForms();
         return app;
     }
 }

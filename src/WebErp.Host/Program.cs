@@ -40,6 +40,9 @@ builder.Services.AddSingleton<ErpConnectionFactory>();
 builder.Services.AddSingleton<IErpUsers, ErpUsers>();
 builder.Services.AddSingleton<IErpMenu, ErpMenu>();
 // Màn dựng từ metadata ERP (M2 danh sách, M3 xem chứng từ): chỉ đọc.
+// Tệp mô tả form viết tay: nhúng trong BE + sửa trên trang quản trị (config.db, có hiệu lực khi cấu hình đổi).
+builder.Services.AddSingleton<WebErp.Core.Metadata.IFormOverlayStore>(sp => sp.GetRequiredService<SqliteTenantStore>());
+builder.Services.AddSingleton<OverlayCatalog>();
 builder.Services.AddSingleton<ErpMetadata>();
 builder.Services.AddSingleton<ErpPermissions>();
 builder.Services.AddSingleton<IErpScreens, ErpScreens>();

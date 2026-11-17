@@ -1,6 +1,7 @@
 using System.Globalization;
 using Dapper;
 using Microsoft.Data.Sqlite;
+using WebErp.Core.Metadata;
 using WebErp.Core.Tenancy;
 
 namespace WebErp.Config;
@@ -10,7 +11,7 @@ namespace WebErp.Config;
 /// <c>config_meta.version</c>; khác thì nạp lại. Nhờ vậy sửa cấu hình bằng công cụ quản trị có hiệu lực trong vài giây, không
 /// phải khởi động lại BE.
 /// </summary>
-public sealed class SqliteTenantStore(ConfigDatabase db, SecretProtector protector, TimeProvider time) : ITenantStore
+public sealed class SqliteTenantStore(ConfigDatabase db, SecretProtector protector, TimeProvider time) : ITenantStore, IFormOverlayStore
 {
     public static readonly TimeSpan CheckInterval = TimeSpan.FromSeconds(5);
 
@@ -44,6 +45,13 @@ public sealed class SqliteTenantStore(ConfigDatabase db, SecretProtector protect
 
     /// <summary>Phiên bản cấu hình đang dùng (cho /health).</summary>
     public async ValueTask<long> GetVersionAsync(CancellationToken ct) => (await GetSnapshotAsync(ct).ConfigureAwait(false)).Version;
+
+    /// <summary>Mô tả form đang bật (bảng <c>form_overlay</c>, có từ schema 4; tệp cũ hơn thì rỗng).</summary>
+    public async ValueTask<FormOverlaySnapshot> GetFormOverlaysAsync(CancellationToken ct)
+    {
+        var s = await GetSnapshotAsync(ct).ConfigureAwait(false);
+        return new FormOverlaySnapshot(s.Version, s.Overlays);
+    }
 
     private async ValueTask<Snapshot> GetSnapshotAsync(CancellationToken ct)
     {
@@ -98,7 +106,11 @@ public sealed class SqliteTenantStore(ConfigDatabase db, SecretProtector protect
         var settings = schema >= 2
             ? c.Query<(string Name, string? Value)>("SELECT name, value_protected FROM setting").ToDictionary(s => s.Name, s => s.Value, StringComparer.Ordinal)
             : new Dictionary<string, string?>(StringComparer.Ordinal);
-        return new Snapshot(version, schema, byKey, byHost, connections, settings);
+        IReadOnlyList<FormOverlayRecord> overlays = schema >= 4
+            ? c.Query<(string Form, string TenantKey, string Json, long Revision)>("SELECT form, tenant_key, json, revision FROM form_overlay WHERE enabled = 1 ORDER BY form, tenant_key")
+                .Select(r => new FormOverlayRecord(r.Form, r.TenantKey.Length == 0 ? null : r.TenantKey, r.Json, r.Revision)).ToList()
+            : [];
+        return new Snapshot(version, schema, byKey, byHost, connections, settings, overlays);
     }
 
     internal static DateTimeOffset? ParseTime(string? s) =>
@@ -110,7 +122,8 @@ public sealed class SqliteTenantStore(ConfigDatabase db, SecretProtector protect
         Dictionary<string, Tenant> ByKey,
         Dictionary<string, IReadOnlyList<Tenant>> ByHost,
         Dictionary<string, string?> Connections,
-        Dictionary<string, string?> Settings);
+        Dictionary<string, string?> Settings,
+        IReadOnlyList<FormOverlayRecord> Overlays);
 
     private sealed class TenantRow
     {

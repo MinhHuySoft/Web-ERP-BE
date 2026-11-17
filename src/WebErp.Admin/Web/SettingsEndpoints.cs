@@ -21,7 +21,7 @@ public static class SettingsEndpoints
         ["tenant.delete"] = "Xóa công ty", ["hostsync.request"] = "Yêu cầu đồng bộ IIS", ["hostsync.retry"] = "Thử lại domain",
         ["hostsync.approve-removal"] = "Xác nhận gỡ domain", ["hostsync.state"] = "Đổi trạng thái domain", ["hostsync.bindings"] = "Sửa binding IIS",
         ["hostsync.add"] = "Domain hoạt động", ["hostsync.remove"] = "Gỡ domain khỏi IIS", ["hostsync.adopt"] = "Nhận quản lý domain",
-        ["hostsync.forget"] = "Bỏ theo dõi domain",
+        ["hostsync.forget"] = "Bỏ theo dõi domain", ["form.save"] = "Lưu mô tả form", ["form.delete"] = "Xóa mô tả form",
     };
 
     /// <summary>Công ty và tài khoản ERP dùng để thử hằng (giữ lại trên form khi lỗi; mật khẩu thì không).</summary>

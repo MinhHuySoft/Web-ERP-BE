@@ -30,6 +30,17 @@ public sealed record FormMeta(
     /// </summary>
     public bool IsDialog => FormType.Equals("DIALOG", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Form viết tay của WinForms (lớp trùng tên che cấu hình DB): theo danh sách lớp đã biết, hoặc vì trang quản trị có mô tả cho form này.
+    /// </summary>
+    public bool HandCoded { get; init; }
+
+    /// <summary>Form dựng theo tệp mô tả (nhúng sẵn hoặc sửa trên trang quản trị).</summary>
+    public bool HasOverlay { get; init; }
+
+    /// <summary>Tệp mô tả có đọc thêm <c>SY_FrmCfg</c> của DB (<c>useDbConfig</c>); false khi bố cục nằm hẳn trong tệp.</summary>
+    public bool OverlayUsesDbConfig { get; init; }
+
     /// <summary>Cấu hình tra cứu / danh sách chọn (<c>SY_FrmDrdwTbl</c>, tài liệu 11 §2.1), dòng của tên form chạy đứng trước.</summary>
     public IReadOnlyList<DropdownMeta> Dropdowns { get; init; } = [];
 

@@ -13,6 +13,13 @@ public sealed record TenantDetail(Tenant Tenant, bool HasConnection, IReadOnlyLi
 
 public sealed record AuditEntry(long Id, DateTimeOffset At, string Actor, string Action, string? Target, string? Detail);
 
+/// <summary>Mô tả form trên trang quản trị. <see cref="TenantKey"/> null = mọi công ty.</summary>
+public sealed record FormOverlayRow(string Form, string? TenantKey, string Json, bool Enabled, string? Note, long Revision, string UpdatedBy, DateTimeOffset UpdatedAt);
+
+/// <summary>Một bản trong lịch sử mô tả form (mỗi lần lưu / xóa).</summary>
+public sealed record FormOverlayHistoryRow(long Id, string Form, string? TenantKey, long Revision, string Action, string? Json, bool Enabled, string? Note,
+    string Actor, DateTimeOffset At);
+
 /// <summary>Bản ghi đã bị người khác sửa sau khi mở (trả 409).</summary>
 public sealed class ConfigConflictException(string message) : Exception(message);
 
@@ -75,6 +82,9 @@ public sealed class ConfigWriter(ConfigDatabase db, SecretProtector protector, T
         {
             hosts = c.Query<string>("SELECT host FROM tenant_host WHERE tenant_key = @key ORDER BY sort, host", new { key }, tx).ToList();
             c.Execute("DELETE FROM tenant_host WHERE tenant_key = @key", new { key }, tx);
+            // Mô tả form riêng của công ty đi theo công ty (lịch sử vẫn giữ để tra).
+            if (c.ExecuteScalar<long>("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'form_overlay'", transaction: tx) > 0)
+                c.Execute("DELETE FROM form_overlay WHERE tenant_key = @key", new { key }, tx);
             Require(c.Execute("DELETE FROM tenant WHERE tenant_key = @key", new { key }, tx), key);
         });
         return hosts;
@@ -203,6 +213,126 @@ public sealed class ConfigWriter(ConfigDatabase db, SecretProtector protector, T
 
     private static string? Blank(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
 
+    /// <summary>Tên form hợp lệ (FormID / tên lớp WinForms): chữ, số, '_', bắt đầu bằng chữ hoặc '_', tối đa 100 ký tự.</summary>
+    public static bool IsValidFormName(string? form) =>
+        !string.IsNullOrEmpty(form) && form.Length <= 100 && (char.IsAsciiLetter(form[0]) || form[0] == '_') && form.All(ch => char.IsAsciiLetterOrDigit(ch) || ch == '_');
+
+    private const string OverlayColumns = "form, tenant_key, json, enabled, note, revision, updated_by, updated_at";
+
+    public IReadOnlyList<FormOverlayRow> ListFormOverlays()
+    {
+        using var c = db.OpenReadOnly();
+        return c.Query<OverlayDb>($"SELECT {OverlayColumns} FROM form_overlay ORDER BY form, tenant_key").Select(r => r.ToRow()).ToList();
+    }
+
+    public FormOverlayRow? GetFormOverlay(string form, string? tenantKey)
+    {
+        using var c = db.OpenReadOnly();
+        return c.QuerySingleOrDefault<OverlayDb>($"SELECT {OverlayColumns} FROM form_overlay WHERE form = @form AND tenant_key = @t",
+            new { form, t = tenantKey ?? "" })?.ToRow();
+    }
+
+    /// <summary>
+    /// Thêm / sửa mô tả form. <paramref name="expectedRevision"/>: null = thêm mới (đã có thì báo trùng), số = phiên bản lúc mở form sửa.
+    /// Nội dung JSON do trang quản trị kiểm trước (BE đọc được, khóa "form" khớp). Nhật ký chỉ ghi phạm vi / phiên bản, không ghi JSON.
+    /// </summary>
+    public long SaveFormOverlay(string form, string? tenantKey, string json, bool enabled, string? note, long? expectedRevision)
+    {
+        if (!IsValidFormName(form)) throw new ArgumentException("Tên form chỉ gồm chữ, số, '_' (vd UserLogFrm).", nameof(form));
+        if (string.IsNullOrWhiteSpace(json)) throw new ArgumentException("Thiếu nội dung mô tả (JSON).", nameof(json));
+        var t = tenantKey ?? "";
+        long revision = 0;
+        Change("form.save", Target(form, tenantKey), null, (c, tx, now) =>
+        {
+            if (t.Length > 0) Require(c.ExecuteScalar<long>("SELECT COUNT(*) FROM tenant WHERE tenant_key = @t", new { t }, tx) > 0 ? 1 : 0, t);
+            var current = c.ExecuteScalar<long?>("SELECT revision FROM form_overlay WHERE form = @form AND tenant_key = @t", new { form, t }, tx);
+            if (expectedRevision is null && current is not null)
+                throw new ConfigConflictException($"Đã có mô tả {form} cho {Scope(tenantKey)}. Mở mô tả đó để sửa.");
+            if (expectedRevision is not null && current != expectedRevision)
+                throw new ConfigConflictException("Mô tả này vừa được người khác sửa hoặc xóa. Mở lại để xem bản mới nhất.");
+            revision = (current ?? 0) + 1;
+            c.Execute("INSERT INTO form_overlay (form, tenant_key, json, enabled, note, revision, updated_by, updated_at) VALUES (@form, @t, @json, @e, @note, @revision, @actor, @now) " +
+                      "ON CONFLICT(form, tenant_key) DO UPDATE SET json = excluded.json, enabled = excluded.enabled, note = excluded.note, revision = excluded.revision, " +
+                      "updated_by = excluded.updated_by, updated_at = excluded.updated_at",
+                new { form, t, json, e = enabled ? 1 : 0, note = Blank(note), revision, actor, now }, tx);
+            History(c, tx, form, t, revision, "save", json, enabled, note, now);
+        }, () => $"phạm vi={Scope(tenantKey)}; phiên bản={revision}; {(enabled ? "bật" : "tắt")}");
+        return revision;
+    }
+
+    /// <summary>Xóa mô tả (lịch sử vẫn giữ). Form quay về tệp nhúng trong BE nếu có, không thì "chưa có trên web".</summary>
+    public void DeleteFormOverlay(string form, string? tenantKey, long? expectedRevision)
+    {
+        var t = tenantKey ?? "";
+        Change("form.delete", Target(form, tenantKey), $"phạm vi={Scope(tenantKey)}", (c, tx, now) =>
+        {
+            var row = c.QuerySingleOrDefault<OverlayDb>($"SELECT {OverlayColumns} FROM form_overlay WHERE form = @form AND tenant_key = @t", new { form, t }, tx)
+                      ?? throw new InvalidOperationException($"Không có mô tả {form} cho {Scope(tenantKey)}.");
+            if (expectedRevision is not null && row.revision != expectedRevision)
+                throw new ConfigConflictException("Mô tả này vừa được người khác sửa. Mở lại để xem bản mới nhất.");
+            c.Execute("DELETE FROM form_overlay WHERE form = @form AND tenant_key = @t", new { form, t }, tx);
+            History(c, tx, form, t, row.revision, "delete", row.json, row.enabled != 0, row.note, now);
+        });
+    }
+
+    public IReadOnlyList<FormOverlayHistoryRow> FormOverlayHistory(string form, string? tenantKey, int limit = 50)
+    {
+        using var c = db.OpenReadOnly();
+        return c.Query<HistoryDb>("SELECT id, form, tenant_key, revision, action, json, enabled, note, actor, at FROM form_overlay_history " +
+                                  "WHERE form = @form AND tenant_key = @t ORDER BY id DESC LIMIT @limit", new { form, t = tenantKey ?? "", limit })
+            .Select(r => r.ToRow()).ToList();
+    }
+
+    public FormOverlayHistoryRow? GetFormOverlayHistory(long id)
+    {
+        using var c = db.OpenReadOnly();
+        return c.QuerySingleOrDefault<HistoryDb>("SELECT id, form, tenant_key, revision, action, json, enabled, note, actor, at FROM form_overlay_history WHERE id = @id",
+            new { id })?.ToRow();
+    }
+
+    private void History(SqliteConnection c, SqliteTransaction tx, string form, string t, long revision, string action, string? json, bool enabled, string? note, string now) =>
+        c.Execute("INSERT INTO form_overlay_history (form, tenant_key, revision, action, json, enabled, note, actor, at) VALUES (@form, @t, @revision, @action, @json, @e, @note, @actor, @now)",
+            new { form, t, revision, action, json, e = enabled ? 1 : 0, note = Blank(note), actor, now }, tx);
+
+    private static string Target(string form, string? tenantKey) => tenantKey is null ? form : $"{form} @ {tenantKey}";
+
+    private static string Scope(string? tenantKey) => tenantKey is null ? "mọi công ty" : $"công ty {tenantKey}";
+
+    // Tên thuộc tính trùng tên cột để Dapper ánh xạ (snake_case).
+#pragma warning disable IDE1006
+    private sealed class OverlayDb
+    {
+        public string form { get; set; } = "";
+        public string tenant_key { get; set; } = "";
+        public string json { get; set; } = "";
+        public long enabled { get; set; }
+        public string? note { get; set; }
+        public long revision { get; set; }
+        public string updated_by { get; set; } = "";
+        public string updated_at { get; set; } = "";
+
+        public FormOverlayRow ToRow() => new(form, tenant_key.Length == 0 ? null : tenant_key, json, enabled != 0, note, revision, updated_by,
+            SqliteTenantStore.ParseTime(updated_at)!.Value);
+    }
+
+    private sealed class HistoryDb
+    {
+        public long id { get; set; }
+        public string form { get; set; } = "";
+        public string tenant_key { get; set; } = "";
+        public long revision { get; set; }
+        public string action { get; set; } = "";
+        public string? json { get; set; }
+        public long enabled { get; set; }
+        public string? note { get; set; }
+        public string actor { get; set; } = "";
+        public string at { get; set; } = "";
+
+        public FormOverlayHistoryRow ToRow() => new(id, form, tenant_key.Length == 0 ? null : tenant_key, revision, action, json, enabled != 0, note, actor,
+            SqliteTenantStore.ParseTime(at)!.Value);
+    }
+#pragma warning restore IDE1006
+
     /// <summary>Bản chụp nhất quán của tệp cấu hình (<c>VACUUM INTO</c>), an toàn khi BE đang chạy.</summary>
     public string Backup(string directory)
     {
@@ -213,12 +343,14 @@ public sealed class ConfigWriter(ConfigDatabase db, SecretProtector protector, T
         return target;
     }
 
-    private void Change(string action, string target, string? detail, Action<SqliteConnection, SqliteTransaction, string> change)
+    /// <param name="detailAfter">Chi tiết nhật ký tính SAU khi thay đổi (vd số phiên bản mới); có thì dùng thay <paramref name="detail"/>.</param>
+    private void Change(string action, string target, string? detail, Action<SqliteConnection, SqliteTransaction, string> change, Func<string?>? detailAfter = null)
     {
         using var c = db.OpenReadWrite();
         using var tx = c.BeginTransaction();
         var now = Iso(time.GetUtcNow());
         change(c, tx, now);
+        if (detailAfter is not null) detail = detailAfter();
         c.Execute("UPDATE config_meta SET version = version + 1 WHERE id = 1", transaction: tx);
         c.Execute("INSERT INTO admin_audit (at, actor, action, target, detail) VALUES (@now, @actor, @action, @target, @detail)",
             new { now, actor, action, target, detail }, tx);

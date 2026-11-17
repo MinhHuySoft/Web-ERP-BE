@@ -58,7 +58,7 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
     private async Task<(FormMeta Form, string? Missing, string? Dropped)> ResolveOverlayAsync(ScreenRequest req, FormMeta form, IEnumerable<SlotMeta> slots,
         CancellationToken ct)
     {
-        if (!FormOverlays.Has(req.FormName)) return (form, null, null);
+        if (!form.HasOverlay) return (form, null, null);
         var missing = new List<string>();
         var dropped = new List<string>();
         var updated = new Dictionary<string, SlotMeta>(form.Slots, StringComparer.OrdinalIgnoreCase);
@@ -80,18 +80,18 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
     /// <summary>Ghi chú lỗi cấu hình kèm slot / bảng chính để tra log.</summary>
     private static string Where(string note, SlotMeta slot) => $"{note} [{slot.Id}, bảng {slot.Source}]";
 
-    /// <summary>Form viết tay chưa có tệp mô tả (<see cref="FormOverlays"/>): web chưa dựng được.</summary>
-    private static bool IsHandCodedWithoutOverlay(string formName) => HandCodedForms.Names.Contains(formName) && !FormOverlays.Has(formName);
+    /// <summary>Form viết tay chưa có tệp mô tả (nhúng hoặc trên trang quản trị): web chưa dựng được.</summary>
+    private static bool IsHandCodedWithoutOverlay(FormMeta? form) => form is { HandCoded: true, HasOverlay: false };
 
     public async Task<ListView> OpenListAsync(ScreenRequest req, CancellationToken ct)
     {
         var form = await metadata.GetFormAsync(req.Tenant, req.FormName, req.RuntimeName, ct);
-        if (form is { IsDialog: true, Master: null } && !IsHandCodedWithoutOverlay(req.FormName))
+        if (form is { IsDialog: true, Master: null } && !IsHandCodedWithoutOverlay(form))
         {
             // Hộp thoại không có dữ liệu để xem (sao lưu, phục hồi…): chỉ thông tin + nút khóa.
             return new ListView(ScreenStatus.Ok, form);
         }
-        if (form?.Master is not { } slot || IsHandCodedWithoutOverlay(req.FormName)) return new ListView(ScreenStatus.NotSupported, form);
+        if (form?.Master is not { } slot || IsHandCodedWithoutOverlay(form)) return new ListView(ScreenStatus.NotSupported, form);
         var overlay = await ResolveOverlayAsync(req, form, [slot], ct);
         if (overlay.Missing is { } mismatch) return new ListView(ScreenStatus.SchemaMismatch, form, Note: mismatch);
         form = overlay.Form;
@@ -151,7 +151,7 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
     public async Task<RecordView> OpenRecordAsync(ScreenRequest req, string key, CancellationToken ct)
     {
         var form = await metadata.GetFormAsync(req.Tenant, req.FormName, req.RuntimeName, ct);
-        if (form?.Master is not { } slot || !form.IsEdit || IsHandCodedWithoutOverlay(req.FormName)) return new RecordView(ScreenStatus.NotSupported, form);
+        if (form?.Master is not { } slot || !form.IsEdit || IsHandCodedWithoutOverlay(form)) return new RecordView(ScreenStatus.NotSupported, form);
         var overlay = await ResolveOverlayAsync(req, form, [slot, .. form.Details.Where(d => !d.Independent && !d.Optional)], ct);
         if (overlay.Missing is { } mismatch) return new RecordView(ScreenStatus.SchemaMismatch, form, key, Note: mismatch);
         form = overlay.Form;
@@ -175,7 +175,7 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
             var details = await DetailPagesAsync(ctx, form, slot, master, visible, c, tx, ct);
             return new RecordView(ScreenStatus.Ok, form, key, slot.PrimaryKey, tabs, details, Note: dropped)
             {
-                CanDesignLayout = ctx.Perm.Admin && FormOverlays.Get(req.FormName, req.Para) is not { UseDbConfig: false },
+                CanDesignLayout = ctx.Perm.Admin && form is not { HasOverlay: true, OverlayUsesDbConfig: false },
             };
         }, e => new RecordView(ScreenStatus.ConfigError, form, key, Note: Where(e, slot)), ct);
     }
@@ -185,7 +185,7 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
         var form = await metadata.GetFormAsync(req.Tenant, req.FormName, req.RuntimeName, ct);
         var detail = form?.Details.FirstOrDefault(d => d.Id.Equals(slotId, StringComparison.OrdinalIgnoreCase));
         // Tab độc lập (IND) mở được cả ở form danh sách, không cần chứng từ.
-        if (form?.Master is not { } slot || !form.IsEdit && detail?.Independent != true || IsHandCodedWithoutOverlay(req.FormName))
+        if (form?.Master is not { } slot || !form.IsEdit && detail?.Independent != true || IsHandCodedWithoutOverlay(form))
             return new DetailView(ScreenStatus.NotSupported);
         if (detail is null) return new DetailView(ScreenStatus.NotFound);
         var overlay = await ResolveOverlayAsync(req, form, [slot, detail], ct);
@@ -440,7 +440,7 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
     /// (vd theo dõi phiếu nhập/xuất kho, phân bổ / khấu hao theo kỳ có ô chi nhánh khóa theo người dùng).
     /// </summary>
     internal static bool BranchFiltered(FormMeta form) =>
-        HandCodedForms.Names.Contains(form.FormName) ? form.Setting("WBR") == "1" : form.Setting("SPA3") != "1";
+        form.HandCoded ? form.Setting("WBR") == "1" : form.Setting("SPA3") != "1";
 
     /// <summary>Lọc ngầm (tài liệu 10 §3.6): quyền chỉ Thêm, chứng từ của chính mình, chi nhánh, FTR, FTX (FTXS).</summary>
     private static async Task ImplicitFiltersAsync(Ctx ctx, FormMeta form, SlotQuery q, IReadOnlySet<string> src, SqlConnection c, SqlTransaction tx,

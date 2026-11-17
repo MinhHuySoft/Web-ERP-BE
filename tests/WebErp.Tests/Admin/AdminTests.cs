@@ -148,6 +148,37 @@ public sealed class AdminTests(AdminFixture f)
             new FormUrlEncodedContent(new Dictionary<string, string> { ["__RequestVerificationToken"] = AdminFixture.Token(sync) })), HttpStatusCode.OK));
         Assert.NotNull(store.Meta().RequestedAt);
 
+        // Mô tả form cứng trên web: danh sách có tệp nhúng; mở tệp nhúng để chép ra sửa; lưu phải kiểm JSON / SQL chỉ đọc / tên / mã TOTP.
+        var forms = await c.GetStringAsync("/admin/forms");
+        Assert.Contains("UserLogFrm", forms);
+        Assert.Contains("Có sẵn trong BE", forms);
+        var builtIn = await c.GetStringAsync("/admin/forms/edit?form=UserLogFrm&scope=");
+        Assert.Contains("{Mod}_UserLog", builtIn);
+        var overlay = new Dictionary<string, string>
+        {
+            ["Form"] = "XFrm", ["Scope"] = "MINHHUY", ["Enabled"] = "true", ["Note"] = "thử",
+            ["Json"] = """{ "form": "XFrm", "formType": "LIST", "caption": "X", "cfg": { "T0": { "TN": "XTbl", "PK": "ID", "FTX": "1=1; DELETE FROM XTbl" } } }""",
+            ["Code"] = f.NextCode(), ["__RequestVerificationToken"] = AdminFixture.Token(builtIn),
+        };
+        async Task<string> SaveOverlay(HttpStatusCode expected) =>
+            await HttpAssert.Status(await c.PostAsync("/admin/forms/save", new FormUrlEncodedContent(overlay)), expected);
+        Assert.Contains("nhiều câu lệnh", await SaveOverlay(HttpStatusCode.UnprocessableEntity));
+        overlay["Json"] = """{ "form": "KhacFrm", "formType": "LIST", "caption": "X", "cfg": { "T0": { "TN": "XTbl", "PK": "ID" } } }""";
+        Assert.Contains("khác tên form", await SaveOverlay(HttpStatusCode.UnprocessableEntity));
+        overlay["Json"] = """{ "form": "XFrm", "formType": "LIST", "caption": "X", "cfg": { "T0": { "TN": "XTbl", "PK": "ID" } } }""";
+        overlay["Code"] = "000000";
+        Assert.Contains("Mã xác thực", await SaveOverlay(HttpStatusCode.UnprocessableEntity));
+        overlay["Code"] = f.NextCode();
+        Assert.Contains("Đã lưu mô tả XFrm (phiên bản 1)", await SaveOverlay(HttpStatusCode.OK));
+        Assert.Contains("Sửa trên web", await c.GetStringAsync("/admin/forms"));
+        Assert.Contains("Lưu mô tả form", await c.GetStringAsync("/admin/audit"));
+        var opened = await c.GetStringAsync("/admin/forms/edit?form=XFrm&scope=MINHHUY");
+        Assert.Equal("1", AdminFixture.Hidden(opened, "__version"));
+        Assert.Contains("Lưu", await c.GetStringAsync("/admin/forms/history?form=XFrm&scope=MINHHUY"));
+        var delOverlay = await c.GetStringAsync("/admin/forms/delete?form=XFrm&scope=MINHHUY");
+        Assert.Contains("Đã xóa mô tả XFrm", await HttpAssert.Status(await c.PostAsync("/admin/forms/delete?form=XFrm&scope=MINHHUY",
+            new FormUrlEncodedContent(new Dictionary<string, string> { ["Code"] = f.NextCode(), ["__RequestVerificationToken"] = AdminFixture.Token(delOverlay) })), HttpStatusCode.OK));
+
         // Xóa công ty: hộp thoại ghi rõ domain bị gỡ khỏi IIS; phải gõ lại mã công ty + mã TOTP.
         var del = await c.GetStringAsync("/admin/tenants/MINHHUY/delete");
         Assert.Contains("MẤT chứng chỉ: minhhuy.bms7.net, moi.bms7.net", del);

@@ -3,6 +3,24 @@
 > **Trạng thái: BẢN NHÁP chờ chủ dự án duyệt** (Phần B, bước 2). Chưa port form nào theo tài liệu này.
 > Cột "Menu TinPhong" chờ file xuất `SY_Menu` của DB TinPhong (phiên VPS), hiện chỉ điền chỗ đã biết từ tài liệu 30.
 
+## 0. Sửa mô tả trên trang quản trị (không cần build / deploy)
+
+Từ PR "mô tả form sửa trên trang quản trị", tệp mô tả (cùng định dạng `src/WebErp.Erp/Metadata/Overlays/*.json`) còn có thể lưu trong
+`config.db` (bảng `form_overlay`, migration `004`) qua trang quản trị → **Mô tả form cứng**:
+
+- **Thứ tự áp:** mô tả riêng một công ty → mô tả chung trên web → tệp nhúng trong BE. Host đọc lại khi cấu hình đổi (vài giây).
+- **Form mới:** có mô tả trên web thì web coi form đó là form viết tay (mô tả che `SY_FrmLstTbl` / `SY_FrmCfg` cùng tên), kể cả khi tên lớp
+  chưa có trong `hand-coded-forms.txt` (form của bản ERP mới).
+- **Kiểm trước khi lưu:**
+  - JSON đọc được, khóa `form` khớp tên.
+  - Mọi đoạn SQL qua `SqlTemplate.EnsureReadOnly`.
+  - Nút "Kiểm trên DB công ty" dựng form trên DB thật và chạy `TOP (0)` từng slot trong giao dịch luôn rollback: chỉ lấy tên cột, không đọc dòng dữ liệu nào.
+- **Lưu / xóa:** cần mã TOTP, ghi nhật ký thao tác (không ghi JSON), giữ lịch sử từng phiên bản để khôi phục.
+- **"Form còn thiếu của công ty":** đọc `{Module}_Menu` và cấu hình form của một công ty, liệt kê form web chưa dựng được.
+- **Khi chạy**, mô tả trên web đi qua đúng lớp bảo vệ như cấu hình DB: kiểm chỉ đọc, giá trị là tham số, giao dịch luôn rollback.
+
+Tệp nhúng vẫn là nơi lưu mô tả đã ổn định (có test). Mô tả viết trên web nên chép về repo khi đã dùng ổn.
+
 ## 1. Nguồn và cách lập
 
 - **Bản ERP:** bản cài TinPhong (`ERP.NET.exe` + `Tools.dll`, 2026-11), do chủ dự án gửi.
