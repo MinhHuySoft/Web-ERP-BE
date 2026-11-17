@@ -48,7 +48,7 @@ public sealed class ErpPermissions(ErpConnectionFactory connections)
         }
         catch (SqlException ex) when (ErpConnectionFactory.IsConnectivity(ex))
         {
-            throw new ErpUnavailableException(tenant.Key, ex);
+            throw ErpConnectionFactory.Translate(tenant.Key, ex, "đọc quyền form", connections.Options.CommandTimeoutSeconds);
         }
     }
 

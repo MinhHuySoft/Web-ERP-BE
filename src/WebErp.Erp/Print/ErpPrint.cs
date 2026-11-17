@@ -256,7 +256,7 @@ public sealed partial class ErpPrint(ErpConnectionFactory connections, ErpMetada
         }
         catch (SqlException ex) when (ErpConnectionFactory.IsConnectivity(ex))
         {
-            throw new ErpUnavailableException(tenant.Key, ex);
+            throw ErpConnectionFactory.Translate(tenant.Key, ex, "in chứng từ", options.CommandTimeoutSeconds);
         }
         catch (SqlException ex)
         {

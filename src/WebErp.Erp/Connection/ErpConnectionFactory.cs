@@ -29,7 +29,20 @@ public sealed class ErpConnectionFactory(ITenantStore tenants, ErpOptions option
         }
     }
 
-    /// <summary>Lỗi do mất kết nối / server, không phải lỗi câu lệnh (tên cột sai, quyền…).</summary>
+    /// <summary>
+    /// Lỗi do hạ tầng (mất kết nối, server, hết thời gian chờ), không phải lỗi câu lệnh (tên cột sai, quyền…). Dùng làm bộ lọc
+    /// <c>catch … when</c>, rồi đổi sang ngoại lệ đúng loại bằng <see cref="Translate"/>.
+    /// </summary>
     public static bool IsConnectivity(SqlException ex) =>
         ex.Class >= 20 || ex.Number is -2 or 53 or 121 or 233 or 10053 or 10054 or 10060 or 10061 or 11001 or 4060 or 18456;
+
+    /// <summary>SQL -2 khi đang chạy lệnh: "Execution Timeout Expired".</summary>
+    public static bool IsCommandTimeout(SqlException ex) => ex.Number == -2;
+
+    /// <summary>
+    /// Lỗi hạ tầng xảy ra KHI CHẠY LỆNH (kết nối đã mở): hết thời gian chờ → <see cref="ErpTimeoutException"/> ("phản hồi chậm"),
+    /// còn lại → <see cref="ErpUnavailableException"/>. Lỗi lúc mở kết nối luôn là "không kết nối được" (<see cref="OpenAsync"/>).
+    /// </summary>
+    public static ErpDatabaseException Translate(string tenantKey, SqlException ex, string operation, int timeoutSeconds) =>
+        IsCommandTimeout(ex) ? new ErpTimeoutException(tenantKey, operation, timeoutSeconds, ex) : new ErpUnavailableException(tenantKey, ex);
 }

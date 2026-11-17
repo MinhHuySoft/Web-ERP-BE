@@ -149,6 +149,48 @@ public sealed class HostTests(HostFixture f)
     }
 
     [Fact]
+    public async Task Slow_menu_is_reported_as_slow_and_cached_menu_is_used_afterwards()
+    {
+        using var c = f.Client();
+        await HttpAssert.Status(await HostFixture.LoginAsync(c, "admin", "123"), HttpStatusCode.SeeOther);
+        try
+        {
+            // Đăng nhập xong chưa có menu cache: DB chậm → 503 "phản hồi chậm", không phải "không kết nối được".
+            f.Erp.MenuFailure = new WebErp.Core.Errors.ErpTimeoutException("MC", "đọc menu", 60, new InvalidOperationException("timeout"));
+            var slow = await c.SendAsync(HostFixture.FrontendGet("/erp/menu"));
+            var body = await HttpAssert.Status(slow, HttpStatusCode.ServiceUnavailable);
+            Assert.Contains("phản hồi chậm", body);
+            Assert.DoesNotContain("Không kết nối được", body);
+            Assert.NotNull(slow.Headers.RetryAfter);
+
+            f.Erp.MenuFailure = new WebErp.Core.Errors.ErpUnavailableException("MC", new InvalidOperationException("down"));
+            Assert.Contains("Không kết nối được", await HttpAssert.Status(await c.SendAsync(HostFixture.FrontendGet("/erp/menu")), HttpStatusCode.ServiceUnavailable));
+
+            // Đọc được một lần thì cache; DB chậm trở lại vẫn mở menu và màn hình được.
+            f.Erp.MenuFailure = null;
+            await HttpAssert.Status(await c.SendAsync(HostFixture.FrontendGet("/erp/menu")), HttpStatusCode.OK);
+            var calls = f.Erp.MenuCalls;
+            f.Erp.MenuFailure = new WebErp.Core.Errors.ErpTimeoutException("MC", "đọc menu", 60, new InvalidOperationException("timeout"));
+            Assert.Contains("Người dùng", await HttpAssert.Status(await c.SendAsync(HostFixture.FrontendGet("/erp/menu")), HttpStatusCode.OK));
+            Assert.Equal(calls, f.Erp.MenuCalls);
+            f.Clock.Advance(TimeSpan.FromMinutes(6));
+            Assert.Contains("Người dùng", await HttpAssert.Status(await c.SendAsync(HostFixture.FrontendGet("/erp/menu")), HttpStatusCode.OK));
+            Assert.Equal(calls + 1, f.Erp.MenuCalls); // đã thử đọc lại, lỗi → dùng menu cũ
+
+            // Đăng xuất bỏ menu cache: lần sau phải đọc lại DB.
+            f.Erp.MenuFailure = null;
+            await c.GetAsync("/erp/logout");
+            await HttpAssert.Status(await HostFixture.LoginAsync(c, "admin", "123"), HttpStatusCode.SeeOther);
+            await HttpAssert.Status(await c.SendAsync(HostFixture.FrontendGet("/erp/menu")), HttpStatusCode.OK);
+            Assert.Equal(calls + 2, f.Erp.MenuCalls);
+        }
+        finally
+        {
+            f.Erp.MenuFailure = null;
+        }
+    }
+
+    [Fact]
     public async Task Database_outage_returns_503_with_message()
     {
         using var c = f.Client();

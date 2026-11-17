@@ -16,5 +16,6 @@
     <PackageVersion Include="DnsClient" Version="1.8.0" />
     <PackageVersion Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.15" />
     <PackageVersion Include="Microsoft.Web.Administration" Version="11.1.0" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.15" />
   </ItemGroup>
 </Project>

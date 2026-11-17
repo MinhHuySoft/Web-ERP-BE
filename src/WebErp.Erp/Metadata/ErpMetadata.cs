@@ -205,7 +205,7 @@ public sealed class ErpMetadata(ErpConnectionFactory connections, TimeProvider t
         }
         catch (SqlException ex) when (ErpConnectionFactory.IsConnectivity(ex))
         {
-            throw new ErpUnavailableException(key.Split(':')[1], ex);
+            throw ErpConnectionFactory.Translate(key.Split(':')[1], ex, "đọc cấu hình form", connections.Options.CommandTimeoutSeconds);
         }
     }
 

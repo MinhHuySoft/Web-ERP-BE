@@ -21,6 +21,12 @@ public static class ErrorHandling
 
         switch (ex)
         {
+            case ErpTimeoutException t:
+                log.LogWarning("DB công ty {Tenant} phản hồi chậm: {Operation} quá {Timeout} giây. Mã {TraceId}", t.TenantKey, t.Operation, t.TimeoutSeconds, traceId);
+                await HtmlResults.WriteAsync(ctx, BasicScreens.Error("Dữ liệu phản hồi chậm",
+                        ErpMessage.Error("Máy chủ dữ liệu của công ty đang phản hồi chậm. Vui lòng thử lại sau ít phút.")),
+                    StatusCodes.Status503ServiceUnavailable, 15);
+                return;
             case ErpUnavailableException u:
                 log.LogWarning(u, "Không kết nối được DB công ty {Tenant}. Mã {TraceId}", u.TenantKey, traceId);
                 await HtmlResults.WriteAsync(ctx, BasicScreens.Error("Mất kết nối dữ liệu",

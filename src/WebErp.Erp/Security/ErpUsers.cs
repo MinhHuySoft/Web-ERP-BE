@@ -48,7 +48,7 @@ public sealed class ErpUsers(ErpConnectionFactory connections) : IErpUsers
         }
         catch (SqlException ex) when (ErpConnectionFactory.IsConnectivity(ex))
         {
-            throw new ErpUnavailableException(tenant.Key, ex);
+            throw ErpConnectionFactory.Translate(tenant.Key, ex, "đọc người dùng", connections.Options.CommandTimeoutSeconds);
         }
     }
 

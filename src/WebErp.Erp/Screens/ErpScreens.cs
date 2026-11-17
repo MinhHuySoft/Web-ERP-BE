@@ -710,7 +710,7 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
         }
         catch (SqlException ex) when (ErpConnectionFactory.IsConnectivity(ex))
         {
-            throw new ErpUnavailableException(tenant.Key, ex);
+            throw ErpConnectionFactory.Translate(tenant.Key, ex, "mở màn hình", connections.Options.CommandTimeoutSeconds);
         }
         catch (SqlException ex)
         {

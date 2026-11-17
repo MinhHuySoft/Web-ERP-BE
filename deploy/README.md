@@ -223,6 +223,7 @@ tệp `.pfx` ở mục 3, như vậy là đủ để dựng lại trên VPS mớ
 | `/health` báo "không đọc được cấu hình" | Pool thiếu quyền đọc `data` (mục 2), hoặc `WebErp__Root` của pool khác của máy |
 | Đăng nhập báo "chưa cấu hình xác thực" | Chưa đặt hằng mật khẩu: trang quản trị → Cài đặt chung (hoặc `WebErp__LegacyPassword__Key`, mục 4) |
 | Mọi người dùng đều bị báo "mật mã không đúng" | Hằng mật khẩu sai. Đặt lại ở Cài đặt chung: trang thử hằng với một tài khoản ERP thật, không khớp thì không lưu |
+| Báo "Máy chủ dữ liệu của công ty đang phản hồi chậm" | Câu lệnh SQL quá thời gian chờ (`Erp:CommandTimeoutSeconds`; menu dùng `Erp:MenuCommandTimeoutSeconds`, mặc định 60). Khác "không kết nối được". Event Log có dòng `Menu công ty <mã>: … ms` cho từng lần đọc menu, quá 5 giây là Warning. Menu đã đọc được giữ tối đa `Session:MenuStaleMinutes` (60) để dùng khi DB chậm |
 | Nhật ký lỗi | Event Viewer → Windows Logs → Application (nguồn `WebErp.Host` / `.NET Runtime` / `IIS AspNetCore Module V2`) |
 | Đổi biến môi trường của pool | `Set-PoolEnv` (mục 4) rồi `Restart-WebAppPool WebErp`. Không cần `iisreset` |
 | Bảo trì một công ty (BE trả 503) | `WebErp.Admin.exe tenant maintenance MINHHUY 30` … `tenant maintenance MINHHUY off` |
