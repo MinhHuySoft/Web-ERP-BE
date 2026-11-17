@@ -8,7 +8,8 @@ using WebErp.Web;
 namespace WebErp.Admin.Web;
 
 /// <summary>Giá trị form công ty (giữ lại khi trả form có lỗi; không bao giờ giữ chuỗi kết nối hay mã xác thực).</summary>
-public sealed record TenantFormValues(string Key, string Name, string Module, string? TaxCode, string? DbLabel, string Hosts, bool Enabled, string? Version)
+public sealed record TenantFormValues(string Key, string Name, string Module, string? TaxCode, string? DbLabel, string Hosts, bool Enabled, string? Version,
+    bool ConfirmHosts = false)
 {
     public static TenantFormValues Empty => new("", "", "SY", null, null, "", true, null);
 
@@ -17,7 +18,8 @@ public sealed record TenantFormValues(string Key, string Name, string Module, st
 
     public static TenantFormValues From(IFormCollection f, string? key = null) =>
         new(key ?? f["Key"].ToString().Trim(), f["Name"].ToString(), f["Module"].ToString().Trim(), f["TaxCode"].ToString(), f["DbLabel"].ToString(),
-            f["Hosts"].ToString(), f["Enabled"].LastOrDefault() == "true", f["__version"].ToString() is { Length: > 0 } v ? v : null);
+            f["Hosts"].ToString(), f["Enabled"].LastOrDefault() == "true", f["__version"].ToString() is { Length: > 0 } v ? v : null,
+            f["ConfirmHosts"].LastOrDefault() == "true");
 
     public IReadOnlyList<string> HostList => Hosts.Split(['\n', '\r', ',', ';', ' '], StringSplitOptions.RemoveEmptyEntries);
 }
@@ -75,7 +77,7 @@ public static class AdminScreens
     }
 
     public static string TenantForm(HttpContext ctx, TenantFormValues v, bool isNew, TenantDetail? detail, TimeZoneInfo zone, TimeProvider time,
-        IReadOnlyList<ErpMessage>? messages = null)
+        IReadOnlyList<ErpMessage>? messages = null, IReadOnlyList<DomainRow>? domains = null, string publicIp = "103.232.122.205")
     {
         var (field, token) = AdminAuth.Tokens(ctx);
         var key = Uri.EscapeDataString(v.Key);
@@ -89,7 +91,10 @@ public static class AdminScreens
             new("TaxCode", "Mã số thuế", Value: v.TaxCode, Span: 12, MaxLength: 20),
             new("DbLabel", "Nhãn dữ liệu", Value: v.DbLabel, Span: 20, MaxLength: 100, Hint: "Hiện ở thanh trạng thái, vd tên DB."),
             new("Hosts", "Domain", "textarea", v.Hosts, Span: 40, Rows: 3, RowStart: true,
-                Hint: "Mỗi dòng một domain, vd congty.bms7.net. Cần bản ghi DNS và chứng chỉ HTTPS cho từng domain trên VPS."),
+                Hint: $"Mỗi dòng một domain, vd congty.finora.io.vn. Tạo bản ghi A <domain> → {publicIp} (DNS only, tắt proxy) TRƯỚC khi lưu. " +
+                      "Agent trên VPS tự thêm binding IIS và xin chứng chỉ HTTPS."),
+            new("ConfirmHosts", "Tôi hiểu: thêm / bỏ domain làm web của TẤT CẢ công ty khởi động lại khoảng 30 giây", "checkbox", v.ConfirmHosts ? "true" : "false",
+                Span: 40, RowStart: true, Hint: "Chỉ cần tích khi thêm hoặc bỏ domain. Domain bỏ đi sẽ bị gỡ khỏi IIS và mất chứng chỉ."),
             new("Enabled", "Đang bật", "checkbox", v.Enabled ? "true" : "false", Span: 10, RowStart: true),
         };
         var tabs = new List<FieldsetModel> { new("Thông tin công ty", info) };
@@ -113,6 +118,11 @@ public static class AdminScreens
                 new FieldModel("StatusLogout", "Đăng xuất mọi người lần cuối", "label",
                     detail.Tenant.LogoutBefore is null ? "Chưa lần nào" : Time(detail.Tenant.LogoutBefore, zone), Span: 14),
             ]));
+            if (domains is { Count: > 0 })
+            {
+                tabs.Add(new FieldsetModel("Domain trên IIS", domains.Select((r, i) =>
+                    new FieldModel("Domain" + i.ToString(CultureInfo.InvariantCulture), r.Host, "label", r.Describe(zone), Span: 40, RowStart: true)).ToList()));
+            }
         }
 
         var toolbar = new List<ToolbarItem> { new("save", isNew ? "Tạo công ty" : "Lưu", Form: RecordId, FormAction: ctx.Url(isNew ? basePath : $"{basePath}/save"), Shortcut: "Ctrl+S") };
@@ -122,6 +132,9 @@ public static class AdminScreens
             toolbar.Add(new ToolbarItem("custom", "Đổi chuỗi kết nối", Href: ctx.Url($"{basePath}/connection"), Target: "dialog", Icon: "key"));
             toolbar.Add(new ToolbarItem("custom", "Bảo trì", Href: ctx.Url($"{basePath}/maintenance"), Target: "dialog", Icon: "lock"));
             toolbar.Add(new ToolbarItem("custom", "Đăng xuất mọi người", Href: ctx.Url($"{basePath}/logout-all"), Target: "dialog", Icon: "users"));
+            toolbar.Add(new ToolbarItem("custom", "Domain & chứng chỉ", Href: ctx.Url($"/admin/domains?tenant={key}"), Target: "tab", Icon: "settings"));
+            toolbar.Add(new ToolbarItem("custom", "Thử lại domain", Href: ctx.Url($"/admin/domains/retry?tenant={key}"), Target: "dialog", Icon: "clock"));
+            toolbar.Add(new ToolbarItem("delete", "Xóa công ty", Href: ctx.Url($"{basePath}/delete"), Target: "dialog"));
         }
         toolbar.Add(new ToolbarItem("cancel", "Về danh sách", Href: ctx.Url("/admin/tenants"), Target: "self"));
 

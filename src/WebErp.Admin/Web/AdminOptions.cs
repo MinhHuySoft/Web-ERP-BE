@@ -16,6 +16,9 @@ public sealed class AdminOptions
     /// </summary>
     public string[] Hosts { get; set; } = [];
 
+    /// <summary>IP công khai của VPS, hiện trong hướng dẫn tạo bản ghi DNS (agent WebErp.HostSync kiểm đúng IP này).</summary>
+    public string PublicIp { get; set; } = "103.232.122.205";
+
     /// <summary>Hết hạn khi rảnh.</summary>
     public int IdleMinutes { get; set; } = 30;
 

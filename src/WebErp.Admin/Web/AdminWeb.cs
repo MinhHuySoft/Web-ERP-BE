@@ -43,7 +43,9 @@ public static class AdminWeb
         builder.Services.AddSingleton<ITenantStore>(sp => sp.GetRequiredService<SqliteTenantStore>());
         builder.Services.AddSingleton<ErpConnectionFactory>();
         builder.Services.AddSingleton<IErpUsers, ErpUsers>();
+        builder.Services.AddSingleton(sp => new HostSyncStore(sp.GetRequiredService<ConfigDatabase>(), sp.GetRequiredService<TimeProvider>()));
         builder.Services.AddScoped<TenantEndpoints.Deps>();
+        builder.Services.AddScoped<DomainEndpoints.Deps>();
         builder.Services.AddAdminAuth(options);
 
         var app = builder.Build();
@@ -69,6 +71,7 @@ public static class AdminWeb
             Results.Json(new { status = "ok", version = Version, admins = accounts.Count() }));
         app.MapAccount();
         app.MapTenants();
+        app.MapDomains();
         app.MapSettings();
         return app;
     }

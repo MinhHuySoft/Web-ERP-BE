@@ -7,6 +7,7 @@
     <Project Path="src/WebErp.Web/WebErp.Web.csproj" />
     <Project Path="src/WebErp.Host/WebErp.Host.csproj" />
     <Project Path="src/WebErp.Admin/WebErp.Admin.csproj" />
+    <Project Path="src/WebErp.HostSync/WebErp.HostSync.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/WebErp.Tests/WebErp.Tests.csproj" />

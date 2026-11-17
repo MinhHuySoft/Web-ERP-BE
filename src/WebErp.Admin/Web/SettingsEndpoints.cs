@@ -18,6 +18,10 @@ public static class SettingsEndpoints
         ["tenant.enable"] = "Bật công ty", ["tenant.disable"] = "Tắt công ty", ["tenant.maintenance"] = "Bảo trì",
         ["tenant.logout-all"] = "Đăng xuất mọi người", ["host.add"] = "Gắn domain", ["host.remove"] = "Bỏ domain",
         ["setting.set"] = "Đặt cài đặt", ["setting.clear"] = "Xóa cài đặt", ["admin.create"] = "Tạo quản trị viên", ["admin.remove"] = "Xóa quản trị viên",
+        ["tenant.delete"] = "Xóa công ty", ["hostsync.request"] = "Yêu cầu đồng bộ IIS", ["hostsync.retry"] = "Thử lại domain",
+        ["hostsync.approve-removal"] = "Xác nhận gỡ domain", ["hostsync.state"] = "Đổi trạng thái domain", ["hostsync.bindings"] = "Sửa binding IIS",
+        ["hostsync.add"] = "Domain hoạt động", ["hostsync.remove"] = "Gỡ domain khỏi IIS", ["hostsync.adopt"] = "Nhận quản lý domain",
+        ["hostsync.forget"] = "Bỏ theo dõi domain",
     };
 
     /// <summary>Công ty và tài khoản ERP dùng để thử hằng (giữ lại trên form khi lỗi; mật khẩu thì không).</summary>
