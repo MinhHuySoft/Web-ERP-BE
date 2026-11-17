@@ -64,10 +64,12 @@ public sealed class OverlayProbeTests(FakeErpDatabase db) : IClassFixture<FakeEr
     public async Task Menu_gaps_list_forms_the_web_cannot_build()
     {
         db.SkipIfUnavailable();
-        var gaps = await Probe().MenuGapsAsync(db.Tenant, CancellationToken.None);
+        var r = await Probe().MenuGapsAsync(db.Tenant, CancellationToken.None);
 
-        Assert.Contains(gaps, g => g.Form == "LogOff");                                  // mục menu không có cấu hình form
-        Assert.Equal("Đăng xuất", gaps.Single(g => g.Form == "LogOff").Caption);
-        Assert.DoesNotContain(gaps, g => g.Form is "NguoiDungFrm" or "CS_ReceiptFrm" or "AP_PurposeRequestListFrm"); // có mô tả / có cấu hình
+        // Đăng xuất (lệnh) và Sổ quỹ (báo cáo) không phải form: chỉ đếm, không liệt kê.
+        Assert.DoesNotContain(r.Gaps, g => g.Form is "LogOff" or "CS_CashBookReport");
+        Assert.Equal(1, r.SkippedCommands);
+        Assert.True(r.SkippedReports >= 1);
+        Assert.DoesNotContain(r.Gaps, g => g.Form is "NguoiDungFrm" or "CS_ReceiptFrm" or "AP_PurposeRequestListFrm"); // có mô tả / có cấu hình
     }
 }
