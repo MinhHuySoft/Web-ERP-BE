@@ -12,6 +12,8 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="QRCoder" />
+    <!-- Gợi ý mô tả form bằng Claude (SDK chính thức); Gemini gọi REST trực tiếp. -->
+    <PackageReference Include="Anthropic" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="WebErp.Tests" />

@@ -107,6 +107,9 @@ public sealed class AdminContractTests(FrontendValidator validator, AdminSite si
     [InlineData("/admin/forms/history?form=XFrm&scope=")]
     [InlineData("/admin/forms/delete?form=XFrm&scope=")]
     [InlineData("/admin/forms/missing")]
+    [InlineData("/admin/forms/ai-settings")]
+    [InlineData("/admin/forms/quick?form=XFrm")]
+    [InlineData("/admin/forms/quick?form=XFrm&tenant=MINHHUY")]
     public async Task Admin_page_passes_frontend_validator(string url) => await AssertValid(await site.Get(url));
 
     [Fact]

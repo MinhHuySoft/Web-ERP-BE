@@ -58,6 +58,8 @@ public static class FormEndpoints
 
     private static string Query(string form, string? scope) => $"form={Uri.EscapeDataString(form)}&scope={Uri.EscapeDataString(scope ?? "")}";
 
+    internal static IResult ListPage(HttpContext ctx, Deps d, IReadOnlyList<ErpMessage>? messages) => HtmlResults.Page(List(ctx, d, messages));
+
     private static string List(HttpContext ctx, Deps d, IReadOnlyList<ErpMessage>? messages)
     {
         var runtime = d.Writer(ctx).ListFormOverlays();
@@ -111,13 +113,22 @@ public static class FormEndpoints
             [
                 new ToolbarItem("new", "Thêm mô tả", Href: ctx.Url("/admin/forms/edit"), Target: "tab"),
                 new ToolbarItem("custom", "Form còn thiếu của công ty", Href: ctx.Url("/admin/forms/missing"), Target: "dialog", Icon: "search"),
+                new ToolbarItem("custom", "Cài đặt AI", Href: ctx.Url("/admin/forms/ai-settings"), Target: "dialog", Icon: "key"),
                 new ToolbarItem("reload", "Nạp lại", Href: ctx.Url("/admin/forms"), Target: "self"),
             ]);
             GridRenderer.Write(w, grid);
         });
     }
 
-    private static IResult Edit(HttpContext ctx, Deps d, string? form, string? scope, IReadOnlyList<ErpMessage>? messages, int status = 200)
+    /// <summary>Mở ô sửa JSON với nội dung cho sẵn (từ "Tạo nhanh" → "Sửa JSON"). Chưa lưu gì.</summary>
+    internal static IResult JsonEditor(HttpContext ctx, Deps d, string form, string? scope, string json, IReadOnlyList<ErpMessage> messages)
+    {
+        var current = d.Writer(ctx).GetFormOverlay(form, scope);
+        var v = new Values(form, scope, json, true, "Tạo nhanh", current?.Revision.ToString(CultureInfo.InvariantCulture), scope, null);
+        return HtmlResults.Page(EditScreen(ctx, d, v, isNew: current is null, existing: current is not null, messages, formLocked: true));
+    }
+
+    internal static IResult Edit(HttpContext ctx, Deps d, string? form, string? scope, IReadOnlyList<ErpMessage>? messages, int status = 200)
     {
         if (string.IsNullOrWhiteSpace(form))
             return HtmlResults.Page(EditScreen(ctx, d, new Values("", null, Template, true, null, null, null, null), isNew: true, existing: false, messages), status);
@@ -381,6 +392,7 @@ public static class FormEndpoints
             new GridColumn("Form", "Form", "link", 220, Frozen: true),
             new GridColumn("Caption", "Tên trên menu", Width: 280),
             new GridColumn("Reason", "Tình trạng", "status", 220),
+            new GridColumn("Quick", "Tạo", "link", 110),
         ], result.Gaps.Select(g => new GridRow(g.Form,
         [
             new GridCell(g.Form, g.Form, ctx.Url($"/admin/forms/edit?{Query(g.Form, null)}"), "tab"),
@@ -388,8 +400,10 @@ public static class FormEndpoints
             g.Reason == "handcoded"
                 ? new GridCell("Form cứng chưa có mô tả", g.Reason, StatusTone: "warning")
                 : new GridCell("Không có cấu hình form", g.Reason, StatusTone: "muted"),
+            new GridCell("Tạo nhanh", "quick", ctx.Url($"/admin/forms/quick?form={Uri.EscapeDataString(g.Form)}&tenant={Uri.EscapeDataString(tenant.Key)}"), "tab"),
         ])).ToList(), KeyField: "Form",
-            Caption: "Bấm tên form để viết mô tả. \"Không có cấu hình form\" thường là form cứng của bản ERP này mà BE chưa có trong danh sách tên lớp.");
+            Caption: "Bấm \"Tạo nhanh\" để chọn bảng / cột bằng ô tích (có gợi ý bằng AI), hoặc bấm tên form để viết JSON. " +
+                     "\"Không có cấu hình form\" thường là form cứng của bản ERP này mà BE chưa có trong danh sách tên lớp.");
         var gaps = result.Gaps;
         var messages = new List<ErpMessage>
         {
