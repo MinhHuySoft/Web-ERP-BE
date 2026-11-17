@@ -367,10 +367,10 @@ public static class FormEndpoints
         var tenant = await d.Tenants.Store.GetAsync(f["Tenant"].ToString(), ctx.RequestAborted);
         if (tenant is null)
             return HtmlResults.Page(MissingDialog(ctx, d, [ErpMessage.Error("Chọn công ty.", "Tenant")]), StatusCodes.Status422UnprocessableEntity);
-        IReadOnlyList<MenuGap> gaps;
+        MenuGaps result;
         try
         {
-            gaps = await d.Probe.MenuGapsAsync(tenant, ctx.RequestAborted);
+            result = await d.Probe.MenuGapsAsync(tenant, ctx.RequestAborted);
         }
         catch (Exception ex) when (ex is WebErp.Core.Errors.ErpDatabaseException or Microsoft.Data.SqlClient.SqlException)
         {
@@ -381,7 +381,7 @@ public static class FormEndpoints
             new GridColumn("Form", "Form", "link", 220, Frozen: true),
             new GridColumn("Caption", "Tên trên menu", Width: 280),
             new GridColumn("Reason", "Tình trạng", "status", 220),
-        ], gaps.Select(g => new GridRow(g.Form,
+        ], result.Gaps.Select(g => new GridRow(g.Form,
         [
             new GridCell(g.Form, g.Form, ctx.Url($"/admin/forms/edit?{Query(g.Form, null)}"), "tab"),
             new GridCell(g.Caption),
@@ -389,13 +389,18 @@ public static class FormEndpoints
                 ? new GridCell("Form cứng chưa có mô tả", g.Reason, StatusTone: "warning")
                 : new GridCell("Không có cấu hình form", g.Reason, StatusTone: "muted"),
         ])).ToList(), KeyField: "Form",
-            Caption: "Bấm tên form để viết mô tả. \"Không có cấu hình\" có thể là mục menu không mở form (vd Thoát), hoặc form cứng của bản ERP mới chưa có trong danh sách.");
+            Caption: "Bấm tên form để viết mô tả. \"Không có cấu hình form\" thường là form cứng của bản ERP này mà BE chưa có trong danh sách tên lớp.");
+        var gaps = result.Gaps;
         var messages = new List<ErpMessage>
         {
             gaps.Count == 0
                 ? ErpMessage.Success($"Mọi form trong menu công ty {tenant.Key} đều dựng được trên web.")
-                : ErpMessage.Info($"Công ty {tenant.Key}: {gaps.Count} form trong menu web chưa dựng được."),
+                : ErpMessage.Info($"Công ty {tenant.Key}: {gaps.Count} form trong menu web chưa dựng được " +
+                                  $"({gaps.Count(g => g.Reason == "handcoded")} form cứng chưa có mô tả, {gaps.Count(g => g.Reason == "noconfig")} không có cấu hình form)."),
         };
+        if (result.SkippedReports + result.SkippedCommands > 0)
+            messages.Add(ErpMessage.Info($"Không tính {result.SkippedReports} báo cáo (mở bằng trình xem báo cáo, thuộc phần báo cáo) " +
+                                         $"và {result.SkippedCommands} mục Thoát / Đăng xuất (web tự xử lý)."));
         return HtmlResults.Page(ScreenRenderer.Render(new ScreenModel("AdminForms", FormTypes.List, $"AdminForms:missing:{tenant.Key}",
             $"Form còn thiếu — {tenant.Key}", Messages: messages), w =>
         {

@@ -1,5 +1,6 @@
 using Dapper;
 using Microsoft.Data.SqlClient;
+using WebErp.Core.Menu;
 using WebErp.Core.Metadata;
 using WebErp.Core.Tenancy;
 using WebErp.Erp.Connection;
@@ -24,6 +25,11 @@ public sealed record OverlayCheck(string? Form, string? Caption, string? FormTyp
 /// <summary>Một form trong menu công ty mà web chưa dựng được.</summary>
 /// <param name="Reason"><c>handcoded</c>: form viết tay chưa có mô tả; <c>noconfig</c>: không có <c>SY_FrmLstTbl</c> / <c>SY_FrmCfg</c> / mô tả.</param>
 public sealed record MenuGap(string Form, string? Caption, string Reason);
+
+/// <summary>Kết quả "Form còn thiếu": các form web chưa dựng được, và số mục menu bỏ qua vì không phải form.</summary>
+/// <param name="SkippedReports">Báo cáo (FormName kết thúc bằng <c>Report</c>, mở bằng trình xem báo cáo): thuộc phần báo cáo, không dùng mô tả form.</param>
+/// <param name="SkippedCommands">Lệnh Thoát / Đăng xuất: web tự xử lý.</param>
+public sealed record MenuGaps(IReadOnlyList<MenuGap> Gaps, int SkippedReports, int SkippedCommands);
 
 /// <summary>
 /// Kiểm tệp mô tả form CHƯA lưu trên DB của một công ty (trang quản trị), và liệt kê form trong menu công ty web chưa dựng được.
@@ -93,16 +99,18 @@ public sealed class OverlayProbe(ErpConnectionFactory connections, ErpMetadata m
 
     /// <summary>
     /// Form trong menu công ty (<c>{Mod}_Menu.FormName</c>) mà web chưa dựng được: viết tay chưa có mô tả, hoặc không có cấu hình nào.
-    /// Chỉ đọc bảng menu và bảng cấu hình form, không đọc dữ liệu nghiệp vụ.
+    /// Chỉ đọc bảng menu và bảng cấu hình form, không đọc dữ liệu nghiệp vụ. Mục menu không phải form (báo cáo, Thoát / Đăng xuất,
+    /// phân loại như <see cref="MenuTree.KindOf"/>) chỉ được đếm; riêng lớp viết tay có tên đuôi <c>Report</c> vẫn liệt kê.
     /// </summary>
-    public async Task<IReadOnlyList<MenuGap>> MenuGapsAsync(Tenant tenant, CancellationToken ct)
+    public async Task<MenuGaps> MenuGapsAsync(Tenant tenant, CancellationToken ct)
     {
-        if (!TenantNames.IsValidModule(tenant.ModuleId)) return [];
+        MenuGaps none = new([], 0, 0);
+        if (!TenantNames.IsValidModule(tenant.ModuleId)) return none;
         var set = await metadata.GetOverlaysAsync(tenant, ct);
         var menu = $"dbo.{tenant.ModuleId.ToUpperInvariant()}_Menu";
         await using var c = await connections.OpenAsync(tenant, ct);
         if (await c.ExecuteScalarAsync<int>(new CommandDefinition("SELECT CASE WHEN OBJECT_ID(@t) IS NULL THEN 0 ELSE 1 END", new { t = menu }, cancellationToken: ct)) == 0)
-            return [];
+            return none;
         var rows = await c.QueryAsync<(string Form, string? Caption, int HasLst, int HasCfg)>(new CommandDefinition(
             // Gom menu theo form trước (SQL Server không cho hàm gộp bọc truy vấn con), rồi mới kiểm có cấu hình form không.
             "SELECT G.FormName, G.VN, " +
@@ -111,13 +119,23 @@ public sealed class OverlayProbe(ErpConnectionFactory connections, ErpMetadata m
             $"FROM (SELECT M.FormName, MAX(M.VN) AS VN FROM {menu} M WHERE COALESCE(M.FormName, '') <> '' GROUP BY M.FormName) G ORDER BY G.FormName",
             commandTimeout: connections.Options.CommandTimeoutSeconds, cancellationToken: ct));
         var gaps = new List<MenuGap>();
+        int reports = 0, commands = 0;
         foreach (var (form, caption, hasLst, hasCfg) in rows)
         {
             var name = form.Trim();
             if (name.Length == 0 || set.Has(name)) continue;
-            if (set.IsHandCoded(name)) gaps.Add(new MenuGap(name, caption?.Trim(), "handcoded"));
-            else if (hasLst == 0 && hasCfg == 0) gaps.Add(new MenuGap(name, caption?.Trim(), "noconfig"));
+            if (set.IsHandCoded(name))
+            {
+                gaps.Add(new MenuGap(name, caption?.Trim(), "handcoded"));
+                continue;
+            }
+            switch (MenuTree.KindOf(new MenuEntry("", null, caption ?? "", name, null, false, false)))
+            {
+                case MenuKind.Report: reports++; continue;
+                case MenuKind.Command: commands++; continue;
+            }
+            if (hasLst == 0 && hasCfg == 0) gaps.Add(new MenuGap(name, caption?.Trim(), "noconfig"));
         }
-        return gaps;
+        return new MenuGaps(gaps, reports, commands);
     }
 }
