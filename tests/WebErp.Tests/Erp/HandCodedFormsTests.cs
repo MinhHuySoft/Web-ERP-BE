@@ -94,10 +94,101 @@ public sealed class HandCodedFormsTests
                 ? new HashSet<string>(full["SY_User"].Where(c => c is not ("TenNgan" or "CeoID")), StringComparer.OrdinalIgnoreCase)
                 : new HashSet<string>(StringComparer.OrdinalIgnoreCase));
 
-        var missing = await OverlaySchema.MissingAsync(slot, Db);
-        Assert.Equal("thiếu cột SY_User.CeoID, SY_User.TenNgan; thiếu bảng SY_UserGroup", missing);
+        // Thiếu bảng nối: không chạy.
+        Assert.Equal("thiếu bảng SY_UserGroup; thiếu cột SY_User.CeoID, SY_User.TenNgan", await OverlaySchema.MissingAsync(slot, Db));
 
         Task<IReadOnlySet<string>> All(string table) => Task.FromResult<IReadOnlySet<string>>(new HashSet<string>(full[table], StringComparer.OrdinalIgnoreCase));
-        Assert.Null(await OverlaySchema.MissingAsync(slot, All));
+        var ok = await OverlaySchema.ResolveAsync(slot, All);
+        Assert.Same(slot, ok.Slot);
+        Assert.Empty(ok.Dropped);
+    }
+
+    private static Func<string, Task<IReadOnlySet<string>>> DbWithout(SlotMeta slot, params string[] absent)
+    {
+        var full = OverlaySchema.Required(slot);
+        return table => Task.FromResult<IReadOnlySet<string>>(new HashSet<string>(
+            full.GetValueOrDefault(table, new HashSet<string>()).Where(c => !absent.Contains($"{table}.{c}", StringComparer.OrdinalIgnoreCase)),
+            StringComparer.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task Display_only_columns_missing_in_db_are_dropped_like_winforms_select_star()
+    {
+        // TinPhong: SY_User thiếu vài cột của Medcom. WinForms đọc SY_User.* nên vẫn mở được; web bỏ cột thiếu.
+        var slot = Master("NguoiDungFrm");
+        var r = await OverlaySchema.ResolveAsync(slot, DbWithout(slot, "SY_User.TenNgan", "SY_User.CeoID", "SY_UserGroup.UserGroupName"));
+        Assert.Null(r.Missing);
+        Assert.Equal(["SY_User.CeoID", "SY_User.TenNgan", "SY_UserGroup.UserGroupName"], r.Dropped);
+        Assert.DoesNotContain("TenNgan", r.Slot!.Select);
+        Assert.DoesNotContain("CeoID", r.Slot.Select);
+        Assert.Contains("SY_User.HoTen", r.Slot.Select);
+        Assert.Null(r.Slot.Joins[0].Select); // G.UserGroupName là mục duy nhất của SE1
+        Assert.Equal(slot.FilterWeb, r.Slot.FilterWeb);
+    }
+
+    [Fact]
+    public async Task Missing_filter_join_or_sort_column_blocks_the_screen()
+    {
+        var slot = Master("NguoiDungFrm");
+        // BranchID dùng trong điều kiện lọc chi nhánh (FTW): bỏ đi có thể lộ dữ liệu → không chạy.
+        Assert.Equal("thiếu cột SY_User.BranchID", (await OverlaySchema.ResolveAsync(slot, DbWithout(slot, "SY_User.BranchID"))).Missing);
+        // Khóa nối.
+        Assert.Contains("SY_UserGroup.UserGroupID", (await OverlaySchema.ResolveAsync(slot, DbWithout(slot, "SY_UserGroup.UserGroupID"))).Missing);
+        // Sắp xếp.
+        Assert.Contains("SY_User.Disable", (await OverlaySchema.ResolveAsync(slot, DbWithout(slot, "SY_User.Disable"))).Missing);
+    }
+
+    [Fact]
+    public async Task Expression_using_a_missing_column_is_dropped_as_a_whole()
+    {
+        // UserLogFrm T1: Note chỉ hiện khi có FormKey để che form người dùng; DB không có FormKey thì bỏ hẳn Note (an toàn).
+        var o = FormOverlays.Get("UserLogFrm", null)!.Value;
+        // {Mod} được thay bằng mã module trước khi biên dịch (ErpMetadata).
+        var rows = o.Rows.Select(r => r with { KeyValue = r.KeyValue?.Replace("{Mod}", "SY", StringComparison.Ordinal) }).ToList();
+        var f = MetadataCompiler.Compile("UserLogFrm", "UserLogFrm", o.Lst, rows, []);
+        var t1 = f.Slots["T1"];
+        var table = OverlaySchema.Required(t1).Keys.Single(k => k.EndsWith("_UserLogDetail", StringComparison.Ordinal));
+        var r = await OverlaySchema.ResolveAsync(t1, DbWithout(t1, $"{table}.FormKey"));
+        Assert.Null(r.Missing);
+        Assert.DoesNotContain("Note", r.Slot!.Expression);
+        Assert.Contains("AS VN", r.Slot.Expression); // mục khác của EX giữ nguyên
+    }
+
+    [Fact]
+    public void Top_level_split_keeps_commas_inside_parentheses_and_quotes()
+    {
+        var items = OverlaySchema.SplitTopLevel("A.X, COALESCE(A.Y, 'a,b') AS Z, CASE WHEN A.W IN (1, 2) THEN 1 END AS V, [A,B].Q").ToList();
+        Assert.Equal(4, items.Count);
+        Assert.Equal(" COALESCE(A.Y, 'a,b') AS Z", items[1]);
+    }
+
+    [Fact]
+    public void Inherited_form_uses_parent_overlay_under_its_own_key()
+    {
+        // AR_Invoice2Frm : AR_InvoiceFrm (lớp con rỗng) — cấu hình / quyền theo khóa AR_Invoice2Frm.
+        var o = FormOverlays.Get("AR_Invoice2Frm", null)!.Value;
+        Assert.Equal("AR_Invoice2Frm", o.Lst.FormID);
+        Assert.Equal("EDIT", o.Lst.FormType);
+        Assert.True(o.UseDbConfig);
+        Assert.Equal(FormOverlays.Get("AR_InvoiceFrm", null)!.Value.Rows.Count, o.Rows.Count);
+        Assert.Contains("AR_Invoice2Frm", HandCodedForms.Names);
+    }
+
+    [Fact]
+    public void New_overlays_compile_and_their_sql_is_read_only()
+    {
+        var batch = FormOverlays.Get("GJ_DocBatchSetupfrm", null)!.Value;
+        var b = MetadataCompiler.Compile("GJ_DocBatchSetupfrm", "GJ_DocBatchSetupfrm", batch.Lst, batch.Rows, []);
+        Assert.True(b.IsEdit);
+        Assert.Equal("DocBatchID", b.Master!.PrimaryKey);
+        Assert.Equal("DocBatchID", b.Slots["T1"].DetailField);
+
+        var log = FormOverlays.Get("UserLogFrm", null)!.Value;
+        var l = MetadataCompiler.Compile("UserLogFrm", "UserLogFrm", log.Lst, log.Rows, []);
+        var daily = l.Slots["T2"];
+        Assert.True(daily.Independent);
+        Assert.Equal(1000, daily.Top);
+        WebErp.Erp.Query.SqlTemplate.EnsureReadOnly(daily.FromOverride!.Replace("{Mod}", "SY", StringComparison.Ordinal), "T2.FRM");
+        Assert.Contains("THEN NULL ELSE A.Note END", daily.FromOverride, StringComparison.Ordinal); // che Note form người dùng
     }
 }

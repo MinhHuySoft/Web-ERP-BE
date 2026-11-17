@@ -51,18 +51,30 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
     internal static bool IsSecret(string column) => SecretColumn().IsMatch(column);
 
     /// <summary>
-    /// Form viết tay dựng theo tệp mô tả: DB của công ty có đủ bảng / cột tệp đó cần không (<see cref="OverlaySchema"/>). Trả mô tả phần
-    /// thiếu, null nếu đủ hoặc form không dùng tệp mô tả.
+    /// Form viết tay dựng theo tệp mô tả: đối chiếu bảng / cột tệp đó cần với DB của công ty (<see cref="OverlaySchema"/>). Cột chỉ để
+    /// hiển thị mà DB không có thì bỏ (như WinForms đọc <c>*</c>); thiếu bảng / cột lọc / khóa nối thì trả <c>Missing</c>.
     /// </summary>
-    private async Task<string?> OverlayMismatchAsync(ScreenRequest req, IEnumerable<SlotMeta> slots, CancellationToken ct)
+    /// <returns>Form đã bỏ cột thiếu; mô tả phần thiếu (không chạy được); mô tả cột đã bỏ (để ghi log).</returns>
+    private async Task<(FormMeta Form, string? Missing, string? Dropped)> ResolveOverlayAsync(ScreenRequest req, FormMeta form, IEnumerable<SlotMeta> slots,
+        CancellationToken ct)
     {
-        if (!FormOverlays.Has(req.FormName)) return null;
-        var parts = new List<string>();
+        if (!FormOverlays.Has(req.FormName)) return (form, null, null);
+        var missing = new List<string>();
+        var dropped = new List<string>();
+        var updated = new Dictionary<string, SlotMeta>(form.Slots, StringComparer.OrdinalIgnoreCase);
         foreach (var slot in slots)
         {
-            if (await OverlaySchema.MissingAsync(slot, t => metadata.GetColumnsAsync(req.Tenant, t, ct)) is { } m) parts.Add($"{slot.Id}: {m}");
+            var r = await OverlaySchema.ResolveAsync(slot, t => metadata.GetColumnsAsync(req.Tenant, t, ct));
+            if (r.Missing is { } m)
+            {
+                missing.Add($"{slot.Id}: {m}");
+                continue;
+            }
+            updated[slot.Id] = r.Slot!;
+            if (r.Dropped.Count > 0) dropped.Add($"{slot.Id}: {string.Join(", ", r.Dropped)}");
         }
-        return parts.Count == 0 ? null : string.Join(" | ", parts);
+        return (form with { Slots = updated }, missing.Count == 0 ? null : string.Join(" | ", missing),
+            dropped.Count == 0 ? null : "bỏ cột DB không có: " + string.Join(" | ", dropped));
     }
 
     /// <summary>Ghi chú lỗi cấu hình kèm slot / bảng chính để tra log.</summary>
@@ -80,7 +92,11 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
             return new ListView(ScreenStatus.Ok, form);
         }
         if (form?.Master is not { } slot || IsHandCodedWithoutOverlay(req.FormName)) return new ListView(ScreenStatus.NotSupported, form);
-        if (await OverlayMismatchAsync(req, [slot], ct) is { } mismatch) return new ListView(ScreenStatus.SchemaMismatch, form, Note: mismatch);
+        var overlay = await ResolveOverlayAsync(req, form, [slot], ct);
+        if (overlay.Missing is { } mismatch) return new ListView(ScreenStatus.SchemaMismatch, form, Note: mismatch);
+        form = overlay.Form;
+        slot = form.Master!;
+        var dropped = overlay.Dropped;
         var ctx = await ContextAsync(req, form, ct);
         var src = await metadata.GetColumnsAsync(req.Tenant, slot.Source, ct);
 
@@ -128,7 +144,7 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
                 data.Rows.Select(row => cols.Select(x => row[x.Index]).ToArray()).ToList(),
                 data.Rows.Select(row => keyIndex < 0 ? "" : Invariant(row[keyIndex])).ToList(),
                 total, sums, filters, keyIndex >= 0 ? slot.PrimaryKey : null, form.IsEdit && keyIndex >= 0,
-                Page: page, PageSize: paged ? take : 0, GroupBy: GroupBy(slot, cols), Tabs: tabs);
+                Page: page, PageSize: paged ? take : 0, GroupBy: GroupBy(slot, cols), Tabs: tabs, Note: dropped);
         }, e => new ListView(ScreenStatus.ConfigError, form, Note: Where(e, slot)), ct);
     }
 
@@ -136,8 +152,11 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
     {
         var form = await metadata.GetFormAsync(req.Tenant, req.FormName, req.RuntimeName, ct);
         if (form?.Master is not { } slot || !form.IsEdit || IsHandCodedWithoutOverlay(req.FormName)) return new RecordView(ScreenStatus.NotSupported, form);
-        if (await OverlayMismatchAsync(req, [slot, .. form.Details.Where(d => !d.Independent && !d.Optional)], ct) is { } mismatch)
-            return new RecordView(ScreenStatus.SchemaMismatch, form, key, Note: mismatch);
+        var overlay = await ResolveOverlayAsync(req, form, [slot, .. form.Details.Where(d => !d.Independent && !d.Optional)], ct);
+        if (overlay.Missing is { } mismatch) return new RecordView(ScreenStatus.SchemaMismatch, form, key, Note: mismatch);
+        form = overlay.Form;
+        slot = form.Master!;
+        var dropped = overlay.Dropped;
         var ctx = await ContextAsync(req, form, ct);
         var src = await metadata.GetColumnsAsync(req.Tenant, slot.Source, ct);
 
@@ -154,7 +173,7 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
                 visible.Add(d);
             }
             var details = await DetailPagesAsync(ctx, form, slot, master, visible, c, tx, ct);
-            return new RecordView(ScreenStatus.Ok, form, key, slot.PrimaryKey, tabs, details)
+            return new RecordView(ScreenStatus.Ok, form, key, slot.PrimaryKey, tabs, details, Note: dropped)
             {
                 CanDesignLayout = ctx.Perm.Admin && FormOverlays.Get(req.FormName, req.Para) is not { UseDbConfig: false },
             };
@@ -169,7 +188,11 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
         if (form?.Master is not { } slot || !form.IsEdit && detail?.Independent != true || IsHandCodedWithoutOverlay(req.FormName))
             return new DetailView(ScreenStatus.NotSupported);
         if (detail is null) return new DetailView(ScreenStatus.NotFound);
-        if (await OverlayMismatchAsync(req, [slot, detail], ct) is { } mismatch) return new DetailView(ScreenStatus.SchemaMismatch, Note: mismatch);
+        var overlay = await ResolveOverlayAsync(req, form, [slot, detail], ct);
+        if (overlay.Missing is { } mismatch) return new DetailView(ScreenStatus.SchemaMismatch, Note: mismatch);
+        form = overlay.Form;
+        slot = form.Master!;
+        detail = form.Slots[detail.Id];
         var ctx = await ContextAsync(req, form, ct);
         if (!DetailVisible(ctx, form, detail)) return new DetailView(ScreenStatus.Forbidden);
         var src = await metadata.GetColumnsAsync(req.Tenant, slot.Source, ct);

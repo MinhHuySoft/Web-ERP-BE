@@ -119,8 +119,10 @@ public sealed class ScreenReadTests(FakeErpDatabase db) : IClassFixture<FakeErpD
         db.SkipIfUnavailable();
         // Form viết tay chưa có tệp mô tả (không có trong menu Medcom).
         Assert.Equal(ScreenStatus.NotSupported, (await Screens().OpenListAsync(Req("ketoan", "HN", "GJ_RefDocumentSetupfrm"), CancellationToken.None)).Status);
-        // Form viết tay CÓ tệp mô tả nhưng DB giả không có bảng CS_ReceiptTbl: báo lỗi cấu hình, không ném lỗi 500.
-        Assert.Equal(ScreenStatus.ConfigError, (await Screens().OpenListAsync(Req("ketoan", "HN", "CS_ReceiptFrm"), CancellationToken.None)).Status);
+        // Form viết tay CÓ tệp mô tả nhưng DB giả không có bảng CS_ReceiptTbl: "chưa có trên web cho công ty này", không chạy SQL.
+        var receipt = await Screens().OpenListAsync(Req("ketoan", "HN", "CS_ReceiptFrm"), CancellationToken.None);
+        Assert.Equal(ScreenStatus.SchemaMismatch, receipt.Status);
+        Assert.Contains("thiếu bảng CS_ReceiptTbl", receipt.Note);
         Assert.Equal(ScreenStatus.NotSupported, (await Screens().OpenListAsync(Req("ketoan", "HN", "Khong_Co_Frm"), CancellationToken.None)).Status);
     }
 

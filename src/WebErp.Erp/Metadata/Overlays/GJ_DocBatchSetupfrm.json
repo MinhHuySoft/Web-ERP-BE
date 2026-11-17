@@ -1,0 +1,33 @@
+// Thiết lập lô chứng từ ghi sổ — chỉ xem. Nguồn: ERP/GJ_DocBatchSetupfrm.cs:409-434 (SetData "*" hai bảng, ô DocBatchID/STT/Memo).
+// Không đọc SY_FrmCfg. Như WinForms, người không phải Admin/Manager chỉ thấy lô mình tạo (FilterEx_NoReload, :428-434):
+// engine tự lọc UserCreate (không đặt SPA2).
+// Cột chi tiết dựng tự động (SetGrid ReBuildColumn): đọc mọi cột, chưa xác minh tên cột ngoài khóa.
+{
+  "form": "GJ_DocBatchSetupfrm",
+  "formType": "EDIT",
+  "caption": "Thiết lập lô chứng từ ghi sổ",
+  "useDbConfig": false,
+  "cfg": {
+    "SP": "9",
+    "T1V": "Thông tin tài khoản",
+    "T0": {
+      "TN": "GJ_DocBatchSetupTbl",
+      "PK": "DocBatchID",
+      "SO": "GJ_DocBatchSetupTbl.DocBatchID",
+      "GD2": "DocBatchID;STT;Memo"
+    },
+    "LYT1": {
+      "DocBatchID": "1;20;1;1;;;;Mã lô",
+      "STT": "5;10;1;;;;;STT",
+      "Memo": "1;40;1;1;;;;Diễn giải"
+    },
+    "T1": {
+      "TN": "GJ_DocBatchSetupDetailTbl",
+      "PK": "UserAutoID",
+      "MUL": "DocBatchID",
+      "MDL": "DocBatchID",
+      "DCP": "Thông tin tài khoản",
+      "HDE": "UserAutoID;DocBatchID"
+    }
+  }
+}
