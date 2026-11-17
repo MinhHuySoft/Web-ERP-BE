@@ -23,8 +23,10 @@ public static class AuthEndpoints
         var g = app.MapGroup("/erp");
         g.MapGet("/login", (HttpContext ctx, IAntiforgery af) => LoginPage(ctx, af, null, null, null));
         g.MapPost("/login", LoginAsync);
-        g.MapMethods("/logout", ["GET", "POST"], async (HttpContext ctx) =>
+        g.MapMethods("/logout", ["GET", "POST"], async (HttpContext ctx, MenuService menu) =>
         {
+            // Đăng xuất: bỏ menu đã cache của người này (đăng nhập lại thì đọc quyền mới).
+            if (ErpSession.From(ctx) is { } s) menu.Invalidate(s.Tenant.Key, s.UserName);
             await ctx.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
             // FE gọi URL đăng xuất rồi chờ form đăng nhập (shell.logout → showLogin): 303 về trang đăng nhập.
             return HtmlResults.SeeOther(ErpUrls.Of(ctx).Login);
@@ -32,7 +34,7 @@ public static class AuthEndpoints
     }
 
     private static async Task<IResult> LoginAsync(HttpContext ctx, IAntiforgery af, IErpUsers users, LoginThrottle throttle,
-        IOptions<WebErpOptions> options, SqliteTenantStore config, TimeProvider time, ILoggerFactory logs)
+        IOptions<WebErpOptions> options, SqliteTenantStore config, TimeProvider time, ILoggerFactory logs, MenuService menu)
     {
         var log = logs.CreateLogger("WebErp.Login");
         var host = ctx.Features.Get<HostTenants>()!;
@@ -84,6 +86,13 @@ public static class AuthEndpoints
         {
             record = await users.FindForLoginAsync(tenant, userName, ctx.RequestAborted);
         }
+        catch (ErpTimeoutException ex)
+        {
+            log.LogWarning("DB công ty {Tenant} phản hồi chậm khi đăng nhập ({Operation} quá {Timeout} giây).", tenant.Key, ex.Operation, ex.TimeoutSeconds);
+            return LoginPage(ctx, af, tenant.Key, userName,
+                [ErpMessage.Error("Máy chủ dữ liệu của công ty đang phản hồi chậm. Vui lòng thử lại sau ít phút.")],
+                StatusCodes.Status503ServiceUnavailable, 15);
+        }
         catch (ErpUnavailableException ex)
         {
             log.LogWarning(ex, "Không kết nối được DB công ty {Tenant} khi đăng nhập.", tenant.Key);
@@ -103,6 +112,8 @@ public static class AuthEndpoints
         throttle.Success(tenant.Key, userName);
         var principal = ErpClaims.Create(tenant, record.User, now, CookieAuthenticationDefaults.AuthenticationScheme);
         await ctx.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal, new AuthenticationProperties { IsPersistent = false });
+        // Đăng nhập lại: đọc menu (quyền) mới, không dùng menu cache của phiên trước.
+        menu.Invalidate(tenant.Key, record.User.UserName);
         log.LogInformation("Đăng nhập: công ty {Tenant}, người dùng {User}, IP {Ip}.", tenant.Key, record.User.UserName, ip);
         // 303 về trang phiên (chuẩn 5.1 cho phép homeUrl hoặc sessionUrl): FE đọc phiên rồi dựng ứng dụng. Không về trang chủ, vì
         // trang chủ có thể kèm thông điệp cảnh báo mà FE hiểu nhầm là đăng nhập lỗi.

@@ -155,7 +155,7 @@ public sealed partial class ErpPrint
         }
         catch (SqlException ex) when (ErpConnectionFactory.IsConnectivity(ex))
         {
-            throw new ErpUnavailableException(request.Tenant.Key, ex);
+            throw ErpConnectionFactory.Translate(request.Tenant.Key, ex, "lưu mẫu in", options.CommandTimeoutSeconds);
         }
 
         static string templateKey(string t) => t.Trim();

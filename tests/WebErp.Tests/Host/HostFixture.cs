@@ -37,8 +37,17 @@ public sealed class FakeErp : IErpUsers, IErpMenu, IErpScreens, IErpPrint, IErpL
     public Task<bool> IsEnabledAsync(Tenant tenant, string userName, CancellationToken ct) =>
         Task.FromResult(Users.TryGetValue($"{tenant.Key}|{userName}", out var u) && u.Enabled);
 
-    public Task<IReadOnlyList<MenuEntry>> GetUserMenuAsync(Tenant tenant, string userName, string language, CancellationToken ct) =>
-        Down ? throw new ErpUnavailableException(tenant.Key, new InvalidOperationException("down")) : Task.FromResult<IReadOnlyList<MenuEntry>>(Menu);
+    /// <summary>Lỗi giả khi đọc menu (vd DB phản hồi chậm).</summary>
+    public Exception? MenuFailure { get; set; }
+
+    public int MenuCalls;
+
+    public Task<IReadOnlyList<MenuEntry>> GetUserMenuAsync(Tenant tenant, string userName, string language, CancellationToken ct)
+    {
+        Interlocked.Increment(ref MenuCalls);
+        if (MenuFailure is { } f) throw f;
+        return Down ? throw new ErpUnavailableException(tenant.Key, new InvalidOperationException("down")) : Task.FromResult<IReadOnlyList<MenuEntry>>(Menu);
+    }
 
     /// <summary>Yêu cầu màn gần nhất (để test kiểm công ty/người dùng lấy từ phiên và query string).</summary>
     public ScreenRequest? LastScreen { get; private set; }

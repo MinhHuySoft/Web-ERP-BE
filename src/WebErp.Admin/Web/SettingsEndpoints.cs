@@ -63,6 +63,10 @@ public static class SettingsEndpoints
             {
                 record = await d.Users.FindForLoginAsync(tenant, test.User, ctx.RequestAborted);
             }
+            catch (ErpTimeoutException)
+            {
+                return Fail(ErpMessage.Error($"DB của {tenant.Key} phản hồi chậm, chưa thử được hằng. Thử lại sau ít phút.", "TestTenant"));
+            }
             catch (ErpUnavailableException)
             {
                 return Fail(ErpMessage.Error($"Không kết nối được DB của {tenant.Key} để thử hằng. Bấm Thử kết nối ở trang công ty.", "TestTenant"));

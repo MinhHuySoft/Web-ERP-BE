@@ -52,8 +52,9 @@ public sealed class CookieValidation(IErpUsers users, IMemoryCache cache, TimePr
         {
             enabled = await users.IsEnabledAsync(tenant, userName, ct);
         }
-        catch (ErpUnavailableException)
+        catch (ErpDatabaseException)
         {
+            // DB chậm / mất kết nối: không đá người dùng ra, kiểm lại ở request sau.
             return null;
         }
         cache.Set(key, enabled, TimeSpan.FromSeconds(options.Value.Session.UserCheckSeconds));

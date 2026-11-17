@@ -1,5 +1,8 @@
+using System.Diagnostics;
 using Dapper;
 using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using WebErp.Core.Errors;
 using WebErp.Core.Menu;
 using WebErp.Core.Tenancy;
@@ -16,25 +19,41 @@ namespace WebErp.Erp.Menu;
 /// <para>
 /// Khác WinForms: hàm lỗi thì báo lỗi, KHÔNG đọc cả bảng menu không lọc quyền (tránh lộ menu không được phép).
 /// </para>
+/// <para>
+/// Timeout riêng <see cref="ErpOptions.MenuCommandTimeoutSeconds"/>. Mỗi lần đọc ghi log thời gian (mở kết nối, chạy hàm) theo công
+/// ty; quá chậm thì cảnh báo. Hết thời gian chờ → <see cref="ErpTimeoutException"/> ("phản hồi chậm"), không phải "mất kết nối".
+/// </para>
 /// </summary>
-public sealed class ErpMenu(ErpConnectionFactory connections) : IErpMenu
+public sealed class ErpMenu(ErpConnectionFactory connections, ILogger<ErpMenu>? log = null) : IErpMenu
 {
+    private readonly ILogger _log = log ?? NullLogger<ErpMenu>.Instance;
+
     public async Task<IReadOnlyList<MenuEntry>> GetUserMenuAsync(Tenant tenant, string userName, string language, CancellationToken ct)
     {
         if (!TenantNames.IsValidModule(tenant.ModuleId)) throw new InvalidOperationException($"Mã module '{tenant.ModuleId}' không hợp lệ.");
         // Tên hàm ghép từ mã module đã kiểm (chỉ chữ cái), không từ dữ liệu người dùng.
         var sql = $"SELECT * FROM dbo.{tenant.ModuleId.ToUpperInvariant()}_GetUserMenuFnc(@u) ORDER BY MenuID";
+        var timeout = connections.Options.MenuCommandTimeoutSeconds;
+        var watch = Stopwatch.StartNew();
         await using var c = await connections.OpenAsync(tenant, ct).ConfigureAwait(false);
+        var openMs = watch.ElapsedMilliseconds;
         try
         {
             var rows = await c.QueryAsync(new CommandDefinition(sql,
                 new { u = new DbString { Value = userName, IsAnsi = true, Length = 100 } },
-                commandTimeout: connections.Options.CommandTimeoutSeconds, cancellationToken: ct)).ConfigureAwait(false);
-            return rows.Select(r => Map((IDictionary<string, object?>)r, language)).OfType<MenuEntry>().ToList();
+                commandTimeout: timeout, cancellationToken: ct)).ConfigureAwait(false);
+            var list = rows.Select(r => Map((IDictionary<string, object?>)r, language)).OfType<MenuEntry>().ToList();
+            var totalMs = watch.ElapsedMilliseconds;
+            _log.Log(totalMs >= connections.Options.MenuSlowLogMs ? LogLevel.Warning : LogLevel.Information,
+                "Menu công ty {Tenant}: {Rows} dòng, {TotalMs} ms (mở kết nối {OpenMs} ms, hàm {Module}_GetUserMenuFnc {QueryMs} ms).",
+                tenant.Key, list.Count, totalMs, openMs, tenant.ModuleId.ToUpperInvariant(), totalMs - openMs);
+            return list;
         }
         catch (SqlException ex) when (ErpConnectionFactory.IsConnectivity(ex))
         {
-            throw new ErpUnavailableException(tenant.Key, ex);
+            _log.LogWarning("Menu công ty {Tenant} lỗi sau {TotalMs} ms (mở kết nối {OpenMs} ms, timeout {Timeout} giây): SQL {Number}.",
+                tenant.Key, watch.ElapsedMilliseconds, openMs, timeout, ex.Number);
+            throw ErpConnectionFactory.Translate(tenant.Key, ex, "đọc menu", timeout);
         }
     }
 

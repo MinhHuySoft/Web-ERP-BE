@@ -168,7 +168,7 @@ public sealed class ErpLayout(ErpConnectionFactory connections, ErpMetadata meta
         }
         catch (SqlException ex) when (ErpConnectionFactory.IsConnectivity(ex))
         {
-            throw new ErpUnavailableException(request.Tenant.Key, ex);
+            throw ErpConnectionFactory.Translate(request.Tenant.Key, ex, "lưu bố cục form", options.CommandTimeoutSeconds);
         }
     }
 
@@ -304,7 +304,7 @@ public sealed class ErpLayout(ErpConnectionFactory connections, ErpMetadata meta
         }
         catch (SqlException ex) when (ErpConnectionFactory.IsConnectivity(ex))
         {
-            throw new ErpUnavailableException(tenant.Key, ex);
+            throw ErpConnectionFactory.Translate(tenant.Key, ex, "đọc bố cục form", options.CommandTimeoutSeconds);
         }
         catch (SqlException ex)
         {

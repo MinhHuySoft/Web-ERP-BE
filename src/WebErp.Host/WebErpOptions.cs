@@ -43,8 +43,14 @@ public sealed class SessionOptions
     /// <summary>Bao lâu kiểm lại user còn hoạt động trong <c>SY_User</c> (cache, để không hỏi DB khách mỗi request).</summary>
     public int UserCheckSeconds { get; set; } = 60;
 
-    /// <summary>Thời gian giữ menu đã đọc (WinForms cache 5 phút, tài liệu 12 §5.3).</summary>
+    /// <summary>Thời gian giữ menu đã đọc (WinForms cache 5 phút, tài liệu 12 §5.3). Quá thời gian này thì đọc lại DB.</summary>
     public int MenuCacheMinutes { get; set; } = 5;
+
+    /// <summary>
+    /// Đọc lại menu mà DB chậm / mất kết nối thì dùng menu cũ gần nhất, nếu menu đó chưa quá chừng này phút (WinForms giữ menu suốt
+    /// phiên đăng nhập). Quá hạn này thì báo lỗi.
+    /// </summary>
+    public int MenuStaleMinutes { get; set; } = 60;
 }
 
 public sealed class LoginOptions
