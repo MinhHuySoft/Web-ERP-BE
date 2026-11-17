@@ -52,6 +52,9 @@ public static class AdminWeb
         builder.Services.AddSingleton<OverlayCatalog>();
         builder.Services.AddSingleton<ErpMetadata>();
         builder.Services.AddSingleton<OverlayProbe>();
+        builder.Services.AddSingleton<SchemaExplorer>();
+        builder.Services.AddSingleton<AiAssistant>();
+        builder.Services.AddScoped<QuickEndpoints.Deps>();
         builder.Services.AddScoped<TenantEndpoints.Deps>();
         builder.Services.AddScoped<DomainEndpoints.Deps>();
         builder.Services.AddScoped<FormEndpoints.Deps>();
@@ -83,6 +86,7 @@ public static class AdminWeb
         app.MapDomains();
         app.MapSettings();
         app.MapForms();
+        app.MapQuick();
         return app;
     }
 }
