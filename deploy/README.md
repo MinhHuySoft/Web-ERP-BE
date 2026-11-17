@@ -272,3 +272,56 @@ site khác), thêm binding `https *:443:admin.bms7.net` cho site `WebErpAdmin`, 
 Gọi từ tên khác, hoặc qua HTTP từ xa, trang quản trị đều từ chối.
 
 **Mất điện thoại:** trên VPS chạy `C:\WebErp\tools\admin\WebErp.Admin.exe admin remove <tên>`, rồi tạo lại ở `http://127.0.0.1:8082/`.
+
+## 10. Agent đồng bộ IIS (WebErp.HostSync)
+
+Trang quản trị không có quyền sửa IIS. Nó chỉ ghi **trạng thái mong muốn** (domain của từng công ty, bảng `tenant_host`). Agent
+`WebErp.HostSync` là Windows Service chạy quyền **LocalSystem**. Agent so trạng thái đó với binding của site `WebErp` rồi thêm hoặc gỡ
+phần chênh lệch:
+
+| Thao tác trên trang quản trị | Agent làm |
+|---|---|
+| Thêm công ty / thêm domain | Kiểm DNS qua 1.1.1.1. Bản ghi A phải đúng IP VPS và không có AAAA; chưa đúng thì để **Chờ DNS**, không gọi Let's Encrypt. Đúng rồi thì thêm `http *:80:<host>` + `https *:443:<host>` (SNI) trong **một** lần commit, chạy win-acme, rồi kiểm `netsh http show sslcert` và `https://<host>/erp/login` = 200 (nối thẳng 127.0.0.1) |
+| Bỏ domain / xóa công ty | Gỡ binding (một lần commit), `netsh http delete sslcert hostnameport=<host>:443`, hủy renewal win-acme **chỉ** khi danh sách tên đúng bằng `{<host>}` và cài vào site WebErp, xóa chứng chỉ khỏi `WebHosting` nếu không binding / ánh xạ nào còn dùng |
+| Tắt công ty | Không làm gì: giữ binding và chứng chỉ (app hiện thông báo tạm dừng) |
+
+An toàn:
+
+- Agent chỉ gỡ domain có trong bảng `managed_host`. Binding cấu hình tay khác trên site WebErp, binding `127.0.0.1:8081` và mọi
+  site khác không bị đụng tới.
+- Domain đã có binding trên site khác: báo **Trùng site khác**, không làm gì.
+- Gỡ hơn 2 domain cùng lúc, hoặc cấu hình bỗng không còn domain nào: agent dừng ở **Chờ xác nhận gỡ**. Quản trị viên vào
+  Domain & chứng chỉ → Xác nhận gỡ (cần mã TOTP).
+- Mỗi lần thêm hoặc gỡ binding, app WebErp khởi động lại (khoảng 30 giây, mọi công ty). Các thay đổi trong cùng một vòng được gộp vào
+  một lần commit. win-acme gắn chứng chỉ vào binding có thể làm app khởi động lại thêm một lần (chưa kiểm trên VPS).
+- Nhật ký: `admin_audit` (actor `hostsync`), Event Log (nguồn `WebErp.HostSync`), `C:\WebErp\logs\hostsync-*.log`. Không có bí mật:
+  agent không đọc chuỗi kết nối.
+
+**Cài / cập nhật.** Agent chạy quyền LocalSystem, vì vậy runner deploy (`weberp-deploy`, repo công khai) **không** được ghi vào bản
+đang chạy. `deploy.ps1` chỉ chép bản mới vào `C:\WebErp\tools\hostsync-staging` (và `tools\setup-hostsync.ps1`). Quản trị viên tự cài:
+
+1. Lần đầu: chép `deploy/setup-hostsync.ps1` vào `C:\WebErp\setup\`. Lần sau, nếu `tools\setup-hostsync.ps1` khác thì đọc lại rồi
+   mới chép đè.
+2. Chạy bằng quyền quản trị:
+
+   ```powershell
+   Start-Process powershell -Verb RunAs -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File C:\WebErp\setup\setup-hostsync.ps1'
+   ```
+
+   Script kiểm tệp trong staging khớp `SHA256SUMS.txt` và in **manifest SHA256**. Đối chiếu mã này với dòng
+   `HostSync <commit> manifest SHA256` trong phần tóm tắt lần chạy CI của commit đó (hoặc truyền `-ExpectedManifestHash`). Sau đó
+   script chép vào `C:\Program Files\WebErp\HostSync`, tạo / cập nhật service `WebErpHostSync` (tự khởi động, tự chạy lại khi lỗi),
+   nhận quản lý `erp.finora.io.vn` + `tinphong.finora.io.vn` (`WebErp.HostSync.exe adopt`) rồi chạy service. Log nằm ở
+   `C:\WebErp\setup\logs`.
+3. Trang quản trị → Domain & chứng chỉ: báo "Có bản agent mới" khi staging khác bản đang chạy, và báo lỗi nếu agent không chạy quá
+   3 phút.
+
+Cấu hình riêng của VPS (IP công khai, đường dẫn wacs…) đặt trong `C:\Program Files\WebErp\HostSync\appsettings.Production.json`.
+Script cài không ghi đè tệp này. Mặc định nằm trong `appsettings.json` của agent.
+
+Lệnh kiểm tra trên VPS:
+
+```powershell
+& 'C:\Program Files\WebErp\HostSync\WebErp.HostSync.exe' status   # trạng thái từng domain
+& 'C:\Program Files\WebErp\HostSync\WebErp.HostSync.exe' once     # chạy một vòng ngay (service vẫn chạy song song được)
+```

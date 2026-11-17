@@ -22,6 +22,8 @@ $ErrorActionPreference = 'Stop'
 $site = Join-Path $Root 'sites\app'
 $adminDir = Join-Path $Root 'tools\admin'
 $adminSite = Join-Path $Root 'sites\admin'
+# Agent HostSync (LocalSystem): chỉ chép bản mới vào đây. Quản trị viên cài bằng C:\WebErp\setup\setup-hostsync.ps1 (README mục 10).
+$hostsyncStaging = Join-Path $Root 'tools\hostsync-staging'
 $previous = Join-Path $Root 'releases\previous'
 
 function Copy-Mirror([string]$from, [string]$to, [string[]]$extra) {
@@ -100,6 +102,19 @@ if (Wait-Healthy $version) {
         else { Write-Warning "Trang quản trị chưa trả lời $AdminHealthUrl. Kiểm tra site WebErpAdmin (README mục 9)." }
     } else {
         Write-Host "Chưa có site quản trị ($adminSite): chỉ cập nhật dòng lệnh ở $adminDir."
+    }
+    # Agent HostSync: KHÔNG tự cài (chạy quyền LocalSystem, runner không được ghi vào bản đang chạy). Lỗi ở đây chỉ cảnh báo.
+    if (Test-Path (Join-Path $Package 'hostsync\WebErp.HostSync.exe')) {
+        try {
+            if (-not (Test-Path $hostsyncStaging)) { New-Item -ItemType Directory -Path $hostsyncStaging | Out-Null }
+            Copy-Mirror (Join-Path $Package 'hostsync') $hostsyncStaging @()
+            # Bản script mới để quản trị viên so với C:\WebErp\setup\setup-hostsync.ps1. Không để trong staging (lệch danh sách SHA-256).
+            Copy-Item (Join-Path $Package 'deploy\setup-hostsync.ps1') (Join-Path $Root 'tools\setup-hostsync.ps1') -Force
+            $manifest = (Get-Content (Join-Path $Package 'hostsync-manifest.txt') -Raw).Trim()
+            Write-Host "Agent HostSync $version đã chép vào $hostsyncStaging (manifest $manifest). Cài: chạy C:\WebErp\setup\setup-hostsync.ps1 bằng quyền quản trị."
+        } catch {
+            Write-Warning "Chép agent HostSync vào staging lỗi: $($_.Exception.Message)"
+        }
     }
     exit 0
 }

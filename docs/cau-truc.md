@@ -11,6 +11,8 @@ WebErp.Admin ┘                ├─► WebErp.Config ─┼─► WebErp.Core
               └──────────────► WebErp.Erp ───────┘
 ```
 
+`WebErp.HostSync` (agent đồng bộ IIS) chỉ phụ thuộc `WebErp.Config` → `WebErp.Core`: không sinh HTML, không đọc DB ERP.
+
 `WebErp.Web` (thêm khi làm trang quản trị) gom phần web dùng chung cho hai site: trả ERP-HTML, lỗi → mã HTTP, header bảo mật,
 `/config.js` + tệp tĩnh FE. Không có nghiệp vụ.
 
@@ -23,6 +25,7 @@ WebErp.Admin ┘                ├─► WebErp.Config ─┼─► WebErp.Core
 | `src/WebErp.Host` | `Program.cs`, `Middleware/` (công ty theo host, lỗi → ERP-HTML, `/config.js`, header bảo mật), `Auth/` (cookie tự chứa, kiểm cookie, chống dò mật khẩu, menu cache), `Endpoints/` (`/erp/login`, `/erp/logout`, `/erp/session`, `/erp/menu`, `/erp/home`, `/erp/screens/*`, `/erp/reports/*`, `/health`) |
 | `src/WebErp.Web` | `HtmlResults`, `ErrorHandling`, `SecurityHeaders`, `FrontendConfig` (`/config.js` + FE cùng origin) |
 | `src/WebErp.Admin` | Trang quản trị trên web (`Web/`: cổng host + HTTPS, đăng nhập mật khẩu + TOTP, thiết lập lần đầu có QR, công ty, cài đặt chung, nhật ký) và dòng lệnh (`Cli.cs`: `init`, `tenant …`, `admin …`, `backup`) |
+| `src/WebErp.HostSync` | Agent đồng bộ IIS (Windows Service, LocalSystem): đọc `tenant_host`, thêm / gỡ binding site WebErp, chứng chỉ Let's Encrypt (win-acme), ghi `managed_host`. `HostPlanner` (tính chênh lệch, thuần), `Reconciler` (một vòng), `Platform/` (IIS, netsh, wacs, kho chứng chỉ, DNS 1.1.1.1, kiểm HTTPS). Cài bằng `deploy/setup-hostsync.ps1` (deploy/README mục 10) |
 | `tests/WebErp.Tests` | Unit + Host qua WebApplicationFactory (ERP giả trong bộ nhớ) |
 | `tests/WebErp.ContractTests` | HTML của renderer chạy qua `validate.js` của FE trong Edge không giao diện: 0 lỗi, 0 cảnh báo |
 | `tests/WebErp.IntegrationTests` | Đọc `SY_User`, menu trên DB **giả** tạo tạm ở LocalDB, xóa sau khi chạy |

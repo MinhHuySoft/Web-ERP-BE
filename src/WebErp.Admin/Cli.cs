@@ -26,6 +26,7 @@ public static class Cli
           tenant host-add <mã> <domain>              gắn thêm domain
           tenant host-remove <mã> <domain>           bỏ domain
           tenant enable <mã> | tenant disable <mã>
+          tenant remove <mã> --yes                   xóa hẳn công ty (agent HostSync gỡ domain khỏi IIS)
           tenant maintenance <mã> <số phút | off>    bật / tắt chế độ bảo trì (BE trả 503)
           tenant logout-all <mã>                     đăng xuất mọi người của công ty
           tenant test <mã>                           thử kết nối DB công ty (chỉ đọc thông tin hệ thống)
@@ -125,6 +126,14 @@ public static class Cli
                 env.Writer.RemoveHost(key!, Arg(a, 3, "domain"));
                 Console.WriteLine("Đã bỏ domain.");
                 return 0;
+            case "tenant remove":
+            {
+                Need(key);
+                if (!a.Has("yes")) throw new ArgumentException("Xóa hẳn công ty: thêm --yes để xác nhận. Muốn tạm dừng thì dùng 'tenant disable'.");
+                var hosts = env.Writer.DeleteTenant(key!);
+                Console.WriteLine(hosts.Count == 0 ? "Đã xóa công ty." : $"Đã xóa công ty. Domain agent HostSync sẽ gỡ nếu không còn công ty khác dùng: {string.Join(", ", hosts)}");
+                return 0;
+            }
             case "tenant enable":
             case "tenant disable":
                 Need(key);

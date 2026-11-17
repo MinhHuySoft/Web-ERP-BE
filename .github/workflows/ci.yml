@@ -61,7 +61,10 @@ jobs:
       - name: Đóng gói
         if: github.event_name != 'pull_request'
         shell: pwsh
-        run: ./deploy/package.ps1 -Version '${{ github.sha }}' -FrontendWeb '_fe/web' -Output 'artifacts/weberp'
+        run: |
+          ./deploy/package.ps1 -Version '${{ github.sha }}' -FrontendWeb '_fe/web' -Output 'artifacts/weberp'
+          # Đối chiếu khi cài agent trên VPS (setup-hostsync.ps1 in cùng mã này).
+          "HostSync ${{ github.sha }} manifest SHA256: ``$((Get-Content artifacts/weberp/hostsync-manifest.txt -Raw).Trim())``" >> $env:GITHUB_STEP_SUMMARY
 
       - uses: actions/upload-artifact@v4
         if: github.event_name != 'pull_request'

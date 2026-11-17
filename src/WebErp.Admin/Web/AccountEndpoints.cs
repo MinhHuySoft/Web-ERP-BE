@@ -207,6 +207,7 @@ public static class AccountEndpoints
     [
         new("01", null, "Quản trị", null, null, false, false),
         new("0101", "01", "Công ty", "AdminTenants", null, false, false),
+        new("01015", "01", "Domain & chứng chỉ", "AdminDomains", null, false, false),
         new("0102", "01", "Cài đặt chung", "AdminSettings", null, false, false),
         new("0103", "01", "Nhật ký thao tác", "AdminAudit", null, true, false),
     ];
@@ -217,6 +218,7 @@ public static class AccountEndpoints
         {
             "AdminTenants" => ctx.Url("/admin/tenants"),
             "AdminSettings" => ctx.Url("/admin/settings"),
+            "AdminDomains" => ctx.Url("/admin/domains"),
             "AdminAudit" => ctx.Url("/admin/audit"),
             _ => ctx.Url("/admin/home"),
         };

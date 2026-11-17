@@ -22,7 +22,7 @@ public static class TenantEndpoints
     {
         var g = app.MapGroup("/admin/tenants").RequireAuthorization();
         g.MapGet("", (HttpContext ctx, Deps d) => HtmlResults.Page(AdminScreens.TenantList(ctx, d.Writer(ctx).List(), d.Time)));
-        g.MapGet("/new", (HttpContext ctx, Deps d) => HtmlResults.Page(AdminScreens.TenantForm(ctx, TenantFormValues.Empty, true, null, d.Zone, d.Time)));
+        g.MapGet("/new", (HttpContext ctx, Deps d) => HtmlResults.Page(Form(ctx, d, TenantFormValues.Empty, true, null)));
         g.MapPost("/new", CreateAsync);
         g.MapGet("/{key}", (HttpContext ctx, string key, Deps d) => Edit(ctx, key, d, null));
         g.MapPost("/{key}/save", SaveAsync);
@@ -33,12 +33,16 @@ public static class TenantEndpoints
         g.MapPost("/{key}/maintenance", SetMaintenanceAsync);
         g.MapGet("/{key}/logout-all", (HttpContext ctx, string key, Deps d) => d.Writer(ctx).Get(key) is null ? NotFound() : HtmlResults.Page(LogoutDialog(ctx, key, null)));
         g.MapPost("/{key}/logout-all", LogoutAllAsync);
+        g.MapGet("/{key}/delete", (HttpContext ctx, string key, Deps d) => d.Writer(ctx).Get(key) is { } t ? HtmlResults.Page(DeleteDialog(ctx, d, t, null)) : NotFound());
+        g.MapPost("/{key}/delete", DeleteAsync);
     }
 
     /// <summary>Các dịch vụ dùng chung của nhóm endpoint.</summary>
     public sealed class Deps(ConfigDatabase db, SecretProtector protector, AdminAccountStore accounts, SqliteTenantStore store, ErpOptions erp,
-        TimeProvider time, IOptions<AdminOptions> options, IErpUsers users)
+        TimeProvider time, IOptions<AdminOptions> options, IErpUsers users, HostSyncStore hostSync)
     {
+        public HostSyncStore HostSync { get; } = hostSync;
+        public string PublicIp { get; } = options.Value.PublicIp;
         public AdminAccountStore Accounts { get; } = accounts;
         public IErpUsers Users { get; } = users;
         public SqliteTenantStore Store { get; } = store;
@@ -53,7 +57,33 @@ public static class TenantEndpoints
     {
         var detail = d.Writer(ctx).Get(key);
         return detail is null ? NotFound()
-            : HtmlResults.Page(AdminScreens.TenantForm(ctx, TenantFormValues.From(detail), false, detail, d.Zone, d.Time, messages), status);
+            : HtmlResults.Page(Form(ctx, d, TenantFormValues.From(detail), false, detail, messages), status);
+    }
+
+    private static string Form(HttpContext ctx, Deps d, TenantFormValues v, bool isNew, TenantDetail? detail, IReadOnlyList<ErpMessage>? messages = null) =>
+        AdminScreens.TenantForm(ctx, v, isNew, detail, d.Zone, d.Time, messages,
+            detail is null ? null : DomainEndpoints.Rows(d.HostSync, detail.Tenant.Key), d.PublicIp);
+
+    /// <summary>
+    /// Đổi domain làm app WebErp khởi động lại (agent sửa binding IIS): bắt tích "Tôi hiểu" và liệt kê rõ domain thêm / gỡ.
+    /// null = không đổi domain, hoặc đã tích xác nhận.
+    /// </summary>
+    private static List<ErpMessage>? HostChangeWarning(Deps d, ConfigWriter writer, string key, IReadOnlyList<string> before, IReadOnlyList<string> after, bool confirmed)
+    {
+        var added = after.Except(before, StringComparer.OrdinalIgnoreCase).ToList();
+        var removed = before.Except(after, StringComparer.OrdinalIgnoreCase).ToList();
+        if (confirmed || (added.Count == 0 && removed.Count == 0)) return null;
+        var list = new List<ErpMessage>
+        {
+            ErpMessage.Warning("Đổi domain: web của TẤT CẢ công ty sẽ khởi động lại khoảng 30 giây. Tích \"Tôi hiểu\" rồi bấm lưu lần nữa.", "ConfirmHosts"),
+        };
+        if (added.Count > 0)
+            list.Add(ErpMessage.Info($"Thêm: {string.Join(", ", added)}. Tạo bản ghi A → {d.PublicIp} (DNS only) trước; agent chờ DNS đúng mới xin chứng chỉ."));
+        var lost = writer.HostsOnlyUsedBy(key, removed);
+        if (lost.Count > 0) list.Add(ErpMessage.Warning($"Gỡ khỏi IIS và mất chứng chỉ: {string.Join(", ", lost)}."));
+        var kept = removed.Except(lost, StringComparer.OrdinalIgnoreCase).ToList();
+        if (kept.Count > 0) list.Add(ErpMessage.Info($"Bỏ khỏi công ty nhưng vẫn giữ trên IIS (công ty khác còn dùng): {string.Join(", ", kept)}."));
+        return list;
     }
 
     private static async Task<IResult> CreateAsync(HttpContext ctx, Deps d)
@@ -61,7 +91,7 @@ public static class TenantEndpoints
         var form = await ctx.Request.ReadFormAsync(ctx.RequestAborted);
         if (!await AdminAuth.ValidAntiforgeryAsync(ctx)) return Expired();
         var v = TenantFormValues.From(form);
-        IResult Fail(params ErpMessage[] m) => HtmlResults.Page(AdminScreens.TenantForm(ctx, v, true, null, d.Zone, d.Time, m), StatusCodes.Status422UnprocessableEntity);
+        IResult Fail(params ErpMessage[] m) => HtmlResults.Page(Form(ctx, d, v, true, null, m), StatusCodes.Status422UnprocessableEntity);
 
         var writer = d.Writer(ctx);
         if (!TenantNames.IsValidKey(v.Key)) return Fail(ErpMessage.Error("Mã công ty chỉ gồm chữ, số, '_' hoặc '-', tối đa 40 ký tự.", "Key"));
@@ -75,6 +105,7 @@ public static class TenantEndpoints
         {
             return Fail(ErpMessage.Error(ex.Message, "Hosts"));
         }
+        if (HostChangeWarning(d, writer, v.Key, [], hosts, v.ConfirmHosts) is { } warn) return Fail([.. warn]);
         if (Normalize(form["Connection"].ToString()) is not { } conn || conn.Error is not null)
             return Fail(ErpMessage.Error(Normalize(form["Connection"].ToString())?.Error ?? "Thiếu chuỗi kết nối.", "Connection"));
         if (!d.Accounts.VerifyCode(AdminAuth.UserName(ctx), form["Code"].ToString()))
@@ -101,9 +132,13 @@ public static class TenantEndpoints
         var detail = writer.Get(key);
         if (detail is null) return NotFound();
         var v = TenantFormValues.From(form, key);
+        IReadOnlyList<string> hosts;
         try
         {
-            writer.Update(key, v.Name, v.Module, v.TaxCode, v.DbLabel, v.Enabled, ConfigWriter.NormalizeHosts(v.HostList), v.Version);
+            hosts = ConfigWriter.NormalizeHosts(v.HostList);
+            if (HostChangeWarning(d, writer, key, detail.Hosts, hosts, v.ConfirmHosts) is { } warn)
+                return HtmlResults.Page(Form(ctx, d, v with { Version = v.Version ?? detail.Revision }, false, detail, warn), StatusCodes.Status422UnprocessableEntity);
+            writer.Update(key, v.Name, v.Module, v.TaxCode, v.DbLabel, v.Enabled, hosts, v.Version);
         }
         catch (ConfigConflictException ex)
         {
@@ -111,10 +146,13 @@ public static class TenantEndpoints
         }
         catch (ArgumentException ex)
         {
-            return HtmlResults.Page(AdminScreens.TenantForm(ctx, v with { Version = detail.Revision }, false, detail, d.Zone, d.Time, [ErpMessage.Error(ex.Message)]),
+            return HtmlResults.Page(Form(ctx, d, v with { Version = detail.Revision }, false, detail, [ErpMessage.Error(ex.Message)]),
                 StatusCodes.Status422UnprocessableEntity);
         }
-        return Edit(ctx, key, d, [ErpMessage.Success("Đã lưu. Host áp dụng trong vài giây.")]);
+        var changed = !new HashSet<string>(detail.Hosts, StringComparer.OrdinalIgnoreCase).SetEquals(hosts);
+        return Edit(ctx, key, d, [ErpMessage.Success(changed
+            ? "Đã lưu. Agent trên VPS sẽ cập nhật IIS trong khoảng 15 giây; xem trạng thái ở \"Domain & chứng chỉ\"."
+            : "Đã lưu. Host áp dụng trong vài giây.")]);
     }
 
     private static async Task<IResult> TestAsync(HttpContext ctx, string key, Deps d)
@@ -177,6 +215,44 @@ public static class TenantEndpoints
             return HtmlResults.Page(LogoutDialog(ctx, key, [ErpMessage.Error("Mã xác thực không đúng hoặc đã dùng.", "Code")]), StatusCodes.Status422UnprocessableEntity);
         writer.LogoutAll(key);
         return Edit(ctx, key, d, [ErpMessage.Success("Mọi phiên của công ty bị từ chối trong vài giây tới.")]);
+    }
+
+    private static string DeleteDialog(HttpContext ctx, Deps d, TenantDetail t, IReadOnlyList<ErpMessage>? messages)
+    {
+        var (field, token) = AdminAuth.Tokens(ctx);
+        var lost = d.Writer(ctx).HostsOnlyUsedBy(t.Tenant.Key, t.Hosts);
+        var kept = t.Hosts.Except(lost, StringComparer.OrdinalIgnoreCase).ToList();
+        var paragraphs = new List<string>
+        {
+            $"Xóa hẳn công ty {t.Tenant.Key} ({t.Tenant.Name}) khỏi cấu hình web, kể cả chuỗi kết nối đã lưu. DB ERP của công ty không bị đụng tới.",
+            "Muốn tạm dừng thì bỏ tích \"Đang bật\" thay vì xóa: domain và chứng chỉ được giữ.",
+            lost.Count > 0
+                ? $"Domain sẽ bị gỡ khỏi IIS (binding http + https, ánh xạ SSL, renewal win-acme) và MẤT chứng chỉ: {string.Join(", ", lost)}. Web của tất cả công ty khởi động lại khoảng 30 giây."
+                : "Công ty không có domain riêng: IIS không thay đổi.",
+        };
+        if (kept.Count > 0) paragraphs.Add($"Vẫn giữ trên IIS (công ty khác còn dùng): {string.Join(", ", kept)}.");
+        return DialogRenderer.Render(new DialogModel($"Xóa công ty — {t.Tenant.Key}", ctx.Url($"/admin/tenants/{Uri.EscapeDataString(t.Tenant.Key)}/delete"), field, token,
+        [
+            new FieldModel("ConfirmKey", "Gõ lại mã công ty để xác nhận", Span: 20, Required: true, Autocomplete: "off", MaxLength: 40),
+            AccountEndpoints.CodeField(),
+        ], "Xóa công ty", SubmitAction: "delete", Size: "md", Paragraphs: paragraphs, Messages: messages));
+    }
+
+    private static async Task<IResult> DeleteAsync(HttpContext ctx, string key, Deps d)
+    {
+        var form = await ctx.Request.ReadFormAsync(ctx.RequestAborted);
+        if (!await AdminAuth.ValidAntiforgeryAsync(ctx)) return Expired();
+        var writer = d.Writer(ctx);
+        if (writer.Get(key) is not { } t) return NotFound();
+        if (!string.Equals(form["ConfirmKey"].ToString().Trim(), t.Tenant.Key, StringComparison.OrdinalIgnoreCase))
+            return HtmlResults.Page(DeleteDialog(ctx, d, t, [ErpMessage.Error("Mã công ty gõ lại không khớp.", "ConfirmKey")]), StatusCodes.Status422UnprocessableEntity);
+        if (!d.Accounts.VerifyCode(AdminAuth.UserName(ctx), form["Code"].ToString()))
+            return HtmlResults.Page(DeleteDialog(ctx, d, t, [ErpMessage.Error("Mã xác thực không đúng hoặc đã dùng.", "Code")]), StatusCodes.Status422UnprocessableEntity);
+        var lost = writer.HostsOnlyUsedBy(t.Tenant.Key, t.Hosts);
+        writer.DeleteTenant(t.Tenant.Key);
+        var messages = new List<ErpMessage> { ErpMessage.Success($"Đã xóa công ty {t.Tenant.Key}.") };
+        if (lost.Count > 0) messages.Add(ErpMessage.Info($"Agent trên VPS sẽ gỡ khỏi IIS: {string.Join(", ", lost)}."));
+        return HtmlResults.Page(AdminScreens.TenantList(ctx, writer.List(), d.Time, messages));
     }
 
     private static string ConnectionDialog(HttpContext ctx, string key, IReadOnlyList<ErpMessage>? messages)
