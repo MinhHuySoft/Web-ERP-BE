@@ -75,6 +75,26 @@ public static class FormOverlays
                 : o.Form;
     }
 
+    /// <summary>Tệp mô tả nhúng (form gốc, không tính bí danh) có bảng chính T0 là <paramref name="table"/>: dùng làm mẫu cho form khác cùng bảng.</summary>
+    public static IReadOnlyList<string> BuiltInForTable(string table) =>
+        All.Value.Values.Where(o => o.Base.Any(r => r.KeyID == "T0" && r.SubID == "TN" && string.Equals(r.KeyValue, table, StringComparison.OrdinalIgnoreCase)))
+            .Select(o => o.Form).Where(f => BuiltInJson(f) is { } j && j.Contains($"\"{f}\"", StringComparison.Ordinal))
+            .Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase).ToList();
+
+    /// <summary>
+    /// Chép tệp mô tả nhúng của <paramref name="from"/> thành mô tả cho <paramref name="form"/> (đổi khóa <c>form</c>, bỏ <c>aliases</c>).
+    /// Chú thích trong tệp gốc không giữ; ghi một dòng nguồn ở đầu. Null nếu không có tệp.
+    /// </summary>
+    public static string? TemplateJson(string from, string form)
+    {
+        if (BuiltInJson(from) is not { } text) return null;
+        var node = System.Text.Json.Nodes.JsonNode.Parse(text, documentOptions: JsonOptions)!.AsObject();
+        node["form"] = form;
+        node.Remove("aliases");
+        var json = node.ToJsonString(new JsonSerializerOptions { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
+        return $"// Dựa theo mô tả có sẵn {from} (cùng bảng chính). Sửa thêm cột / tab riêng của {form} nếu cần.\n{json}\n";
+    }
+
     /// <summary>
     /// Đọc một tệp mô tả (JSON, cho phép chú thích <c>//</c>): trả form chính và các bí danh. Ném <see cref="InvalidDataException"/>
     /// (thông điệp tiếng Việt, không chứa dữ liệu) nếu JSON sai hoặc thiếu khóa bắt buộc.

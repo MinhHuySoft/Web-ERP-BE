@@ -87,6 +87,51 @@ public sealed class SchemaExplorer(ErpConnectionFactory connections, ErpMetadata
     }
 
     /// <summary>
+    /// Tên thay mã theo quy ước ERP: cột <c>XxxID</c> → bảng danh mục <c>CF_XxxTbl</c> (hoặc <c>CF_Xxx</c>, <c>&lt;tiền tố&gt;XxxTbl</c>) có cột
+    /// <c>XxxID</c> và <c>XxxName</c>; hiện thêm <c>XxxName</c> (và <c>Address</c> / <c>Unit</c> nếu có, như mô tả có sẵn). Chỉ đọc tên cột.
+    /// </summary>
+    public async Task<IReadOnlyList<QuickLookup>> LookupsAsync(Tenant tenant, string table, IReadOnlyList<DbColumn> columns, IReadOnlyList<string> objects,
+        CancellationToken ct)
+    {
+        var have = new HashSet<string>(objects, StringComparer.OrdinalIgnoreCase);
+        var prefix = QuickGuesser.Prefix(table);
+        var wanted = new List<(string Column, string Base, string Table)>();
+        foreach (var c in columns)
+        {
+            if (c.IsPrimaryKey || c.Name.Length <= 2 || !c.Name.EndsWith("ID", StringComparison.OrdinalIgnoreCase)) continue;
+            var b = c.Name[..^2];
+            var target = new[] { $"CF_{b}Tbl", $"CF_{b}", $"{prefix}{b}Tbl" }
+                .FirstOrDefault(n => have.Contains(n) && !n.Equals(table, StringComparison.OrdinalIgnoreCase));
+            if (target is not null) wanted.Add((c.Name, b, objects.First(o => o.Equals(target, StringComparison.OrdinalIgnoreCase))));
+        }
+        if (wanted.Count == 0) return [];
+        await using var c2 = await connections.OpenAsync(tenant, ct);
+        var p = new DynamicParameters();
+        var ids = new List<string>();
+        foreach (var (w, i) in wanted.Select((w, i) => (w, i)))
+        {
+            p.Add($"t{i}", w.Table);
+            ids.Add($"OBJECT_ID(@t{i})");
+        }
+        var cols = (await c2.QueryAsync<(string Table, string Column)>(new CommandDefinition(
+                $"SELECT OBJECT_NAME(object_id), name FROM sys.columns WHERE object_id IN ({string.Join(", ", ids)})", p,
+                commandTimeout: connections.Options.CommandTimeoutSeconds, cancellationToken: ct)))
+            .ToLookup(x => x.Table, x => x.Column, StringComparer.OrdinalIgnoreCase);
+        var result = new List<QuickLookup>();
+        foreach (var w in wanted)
+        {
+            var tc = cols[w.Table].ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var name = $"{w.Base}Name";
+            if (!tc.Contains(w.Column) || !tc.Contains(name)) continue;
+            var show = new List<string> { tc.First(x => x.Equals(name, StringComparison.OrdinalIgnoreCase)) };
+            foreach (var extra in new[] { "Address", "Unit" })
+                if (tc.FirstOrDefault(x => x.Equals(extra, StringComparison.OrdinalIgnoreCase)) is { } e) show.Add(e);
+            result.Add(new QuickLookup(w.Column, w.Table, tc.First(x => x.Equals(w.Column, StringComparison.OrdinalIgnoreCase)), show));
+        }
+        return result;
+    }
+
+    /// <summary>
     /// Cột nối bảng chi tiết về bảng chính: theo khóa ngoại nếu có; không thì cột trùng tên với khóa chính của bảng chính.
     /// Trả (cột bảng chính, cột bảng chi tiết) hoặc null.
     /// </summary>
@@ -150,7 +195,12 @@ public sealed class SchemaExplorer(ErpConnectionFactory connections, ErpMetadata
             var q = new SlotQuery(slot, _ => (true, null));
             if (filter is { } f) q.Where.Add($"{q.Col(f.Column)} = {q.Param(f.Value)}");
             var data = await SqlReader.ReadAsync(c, tx, q.ListSql(PreviewRows), q.Parameters, connections.Options.CommandTimeoutSeconds, PreviewRows, ct);
-            var keep = Enumerable.Range(0, data.Names.Length).Where(i => !ErpScreens.IsSecret(data.Names[i])).ToArray();
+            // Mọi cột đều được đọc (như lưới ERP); xem thử chỉ hiện cột hiện sẵn (GD2, theo thứ tự đó) để giống màn web lúc mở.
+            var index = Enumerable.Range(0, data.Names.Length).Where(i => !ErpScreens.IsSecret(data.Names[i]))
+                .ToDictionary(i => data.Names[i], i => i, StringComparer.OrdinalIgnoreCase);
+            var keep = slot.Order.Count == 0 ? index.Values.ToArray()
+                : new[] { slot.PrimaryKey }.Concat(slot.Order).Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Where(index.ContainsKey).Select(n => index[n]).ToArray();
             var rows = data.Rows.Select(r => (IReadOnlyList<string?>)keep.Select(i => Text(r[i])).ToList()).ToList();
             var first = data.Rows.Count == 0 ? null
                 : Enumerable.Range(0, data.Names.Length).ToDictionary(i => data.Names[i], i => data.Rows[0][i], StringComparer.OrdinalIgnoreCase);

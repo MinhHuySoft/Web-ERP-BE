@@ -3,12 +3,23 @@ using System.Text.Json;
 
 namespace WebErp.Erp.Screens;
 
+/// <summary>
+/// Tên thay mã: nối cột mã (vd <c>ObjectID</c>) sang bảng danh mục (<c>CF_ObjectTbl</c>) để hiện thêm tên (<c>ObjectName</c>, <c>Address</c>), như
+/// các tệp mô tả có sẵn (<c>TN1</c> / <c>FKA1</c> / <c>FKB1</c> / <c>SE1</c>).
+/// </summary>
+public sealed record QuickLookup(string Column, string Table, string Key, IReadOnlyList<string> Show);
+
 /// <summary>Một bảng của mô tả "Tạo nhanh": bảng chính (T0) hoặc một tab chi tiết (T1…).</summary>
-/// <param name="Columns">Cột hiện trên lưới, theo thứ tự chọn (khóa luôn được đọc kèm).</param>
+/// <param name="Columns">Cột hiện sẵn trên lưới (<c>GD2</c>), theo thứ tự chọn. Mọi cột của bảng vẫn được đọc như lưới ERP; cột không chọn
+/// ẩn sẵn, người dùng bật lại bằng nút Cột.</param>
 /// <param name="MasterKey">Tab chi tiết: cột của bảng chính dùng để nối (<c>MUL</c>).</param>
 /// <param name="DetailKey">Tab chi tiết: cột của bảng chi tiết trỏ về bảng chính (<c>MDL</c>).</param>
+/// <param name="Lookups">Tên thay mã (tối đa 4 bảng danh mục mỗi bảng).</param>
 public sealed record QuickSlot(string Table, string PrimaryKey, IReadOnlyList<string> Columns, string? SortColumn = null, bool SortDesc = true,
-    string? Caption = null, string? MasterKey = null, string? DetailKey = null);
+    string? Caption = null, string? MasterKey = null, string? DetailKey = null, IReadOnlyList<QuickLookup>? Lookups = null)
+{
+    public const int MaxLookups = 4;
+}
 
 /// <summary>
 /// Mô tả form viết tay dựng bằng chọn / tích (trang quản trị → "Tạo nhanh"), không phải viết JSON. <see cref="ToJson"/> sinh tệp mô tả
@@ -42,21 +53,32 @@ public sealed record QuickSpec(string Form, string Caption, string FormType, int
             d["MDL"] = s.DetailKey;
         }
         if (!string.IsNullOrWhiteSpace(s.Caption)) d["DCP"] = s.Caption.Trim();
-        var cols = new List<string> { s.PrimaryKey };
-        if (s.DetailKey is not null) cols.Add(s.DetailKey);
-        cols.AddRange(s.Columns);
-        cols = cols.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        d["SE"] = string.Join(", ", cols.Select(c => Qualified(s.Table, c)));
+        // Không đặt SE: đọc MỌI cột của bảng (Bảng.*) như lưới WinForms; GD2 chỉ quyết định cột hiện sẵn.
+        var visible = new List<string>(s.Columns);
+        var n = 1;
+        foreach (var l in (s.Lookups ?? []).Take(QuickSlot.MaxLookups))
+        {
+            var alias = $"L{n}";
+            d[$"TN{n}"] = l.Table;
+            d[$"TA{n}"] = alias;
+            d[$"FKA{n}"] = l.Column;
+            d[$"FKB{n}"] = l.Key;
+            d[$"SE{n}"] = string.Join(", ", l.Show.Select(c => $"{alias}.{Name(c)}"));
+            // Tên hiện ngay sau cột mã (nếu cột mã đang hiện), không thì cuối.
+            var at = visible.FindIndex(c => c.Equals(l.Column, StringComparison.OrdinalIgnoreCase));
+            visible.InsertRange(at < 0 ? visible.Count : at + 1, l.Show.Where(c => !visible.Contains(c, StringComparer.OrdinalIgnoreCase)));
+            n++;
+        }
         if (s.SortColumn is not null) d["SO"] = Qualified(s.Table, s.SortColumn) + (s.SortDesc ? " DESC" : "");
         if (top > 0) d["TRS"] = top.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        if (s.Columns.Count > 0) d["GD2"] = string.Join(";", s.Columns);
+        if (visible.Count > 0) d["GD2"] = string.Join(";", visible);
         return d;
     }
 
     /// <summary><c>Bảng.Cột</c>; tên có ký tự lạ thì đặt trong ngoặc vuông.</summary>
     internal static string Qualified(string table, string column) => $"{Name(table)}.{Name(column)}";
 
-    private static string Name(string n) =>
+    internal static string Name(string n) =>
         n.Length > 0 && (char.IsAsciiLetter(n[0]) || n[0] == '_') && n.All(ch => char.IsAsciiLetterOrDigit(ch) || ch == '_')
             ? n : "[" + n.Replace("]", "]]", StringComparison.Ordinal) + "]";
 }

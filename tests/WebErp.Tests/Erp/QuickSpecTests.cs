@@ -11,8 +11,10 @@ public sealed class QuickSpecTests
     public void Generated_json_is_a_valid_overlay_with_master_detail_link()
     {
         var spec = new QuickSpec("AR_OrderFrm", "Quản lý đặt hàng", "EDIT", 500,
-            new QuickSlot("AR_OrderTbl", "DocumentID", ["DocumentID", "DocumentDate", "ObjectName"], "DocumentDate", true),
-            [new QuickSlot("AR_OrderDetailTbl", "UserAutoID", ["ItemID", "Quantity"], null, true, "Hàng hóa", "DocumentID", "DocumentID")]);
+            new QuickSlot("AR_OrderTbl", "DocumentID", ["DocumentID", "DocumentDate", "ObjectID", "Memo"], "DocumentDate", true,
+                Lookups: [new QuickLookup("ObjectID", "CF_ObjectTbl", "ObjectID", ["ObjectName", "Address"])]),
+            [new QuickSlot("AR_OrderDetailTbl", "UserAutoID", ["ItemID", "Quantity"], null, true, "Hàng hóa", "DocumentID", "DocumentID",
+                [new QuickLookup("ItemID", "CF_ItemTbl", "ItemID", ["ItemName", "Unit"])])]);
         var json = spec.ToJson();
 
         var v = FormOverlays.Validate(json);
@@ -20,9 +22,25 @@ public sealed class QuickSpecTests
         Assert.Equal("AR_OrderFrm", v.Form);
         Assert.Contains("\"SO\": \"AR_OrderTbl.DocumentDate DESC\"", json);
         Assert.Contains("\"MUL\": \"DocumentID\"", json);
-        Assert.Contains("\"GD2\": \"ItemID;Quantity\"", json);
-        Assert.Contains("\"SE\": \"AR_OrderDetailTbl.UserAutoID, AR_OrderDetailTbl.DocumentID, AR_OrderDetailTbl.ItemID, AR_OrderDetailTbl.Quantity\"", json);
+        // Đọc mọi cột như lưới ERP (không có SE); GD2 là cột hiện sẵn, tên hiện ngay sau cột mã.
+        Assert.DoesNotContain("\"SE\"", json);
+        Assert.Contains("\"GD2\": \"DocumentID;DocumentDate;ObjectID;ObjectName;Address;Memo\"", json);
+        Assert.Contains("\"GD2\": \"ItemID;ItemName;Unit;Quantity\"", json);
+        Assert.Contains("\"TN1\": \"CF_ObjectTbl\"", json);
+        Assert.Contains("\"SE1\": \"L1.ItemName, L1.Unit\"", json);
         Assert.Contains("Quản lý đặt hàng", json);   // không mã hóa \uXXXX
+    }
+
+    [Fact]
+    public void Template_copies_a_built_in_overlay_for_another_form()
+    {
+        Assert.Contains("AR_InvoiceFrm", FormOverlays.BuiltInForTable("AR_InvoiceTbl"));
+        var json = FormOverlays.TemplateJson("AR_InvoiceFrm", "AR_InvoiceTinPhongMNFrm")!;
+        var v = FormOverlays.Validate(json);
+        Assert.Null(v.Error);
+        Assert.Equal("AR_InvoiceTinPhongMNFrm", v.Form);
+        Assert.Empty(v.Aliases);                       // bí danh của form gốc không chép sang
+        Assert.Contains("AR_VATInvoiceTbl", json);     // đủ tab như form gốc
     }
 
     [Fact]
