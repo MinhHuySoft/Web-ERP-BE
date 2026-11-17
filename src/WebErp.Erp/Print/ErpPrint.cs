@@ -260,7 +260,7 @@ public sealed partial class ErpPrint(ErpConnectionFactory connections, ErpMetada
         }
         catch (SqlException ex)
         {
-            return error($"SP báo cáo lỗi (SQL {ex.Number}): {ex.Message}");
+            return error($"SP báo cáo lỗi ({WebErp.Erp.Screens.SqlErrorText.Describe(ex)})");
         }
         finally
         {

@@ -40,18 +40,26 @@ public sealed class FakeErp : IErpUsers, IErpMenu, IErpScreens, IErpPrint, IErpL
     public Task<IReadOnlyList<MenuEntry>> GetUserMenuAsync(Tenant tenant, string userName, string language, CancellationToken ct) =>
         Down ? throw new ErpUnavailableException(tenant.Key, new InvalidOperationException("down")) : Task.FromResult<IReadOnlyList<MenuEntry>>(Menu);
 
+    /// <summary>Kết quả cho lần mở danh sách kế tiếp (một lần), để test các trạng thái lỗi.</summary>
+    public ListView? NextList { get; set; }
+
     /// <summary>Yêu cầu màn gần nhất (để test kiểm công ty/người dùng lấy từ phiên và query string).</summary>
     public ScreenRequest? LastScreen { get; private set; }
 
     public Task<ListView> OpenListAsync(ScreenRequest request, CancellationToken ct)
     {
         LastScreen = request;
+        if (NextList is { } next)
+        {
+            NextList = null;
+            return Task.FromResult(next);
+        }
         return Task.FromResult(request.FormName switch
         {
             "AP_PurposeRequestListFrm" => SampleScreens.List(),
-            // Lỗi SQL có giá trị dữ liệu trong thông điệp: log không được chép thông điệp này.
+            // Ghi chú như ErpScreens dựng cho lỗi SQL 245 (SqlErrorText): thông điệp có giá trị dữ liệu nên đã bỏ.
             "NguoiDungFrm" => new ListView(ScreenStatus.ConfigError,
-                Note: "Câu truy vấn dựng từ cấu hình form bị lỗi (SQL 245): Conversion failed when converting the varchar value 'GIA-TRI-RIENG' to data type int."),
+                Note: "Câu truy vấn dựng từ cấu hình form bị lỗi (SQL 245; nội dung lỗi không ghi vì có thể chứa dữ liệu) [T0, bảng SY_User]"),
             _ => new ListView(ScreenStatus.NotSupported),
         });
     }

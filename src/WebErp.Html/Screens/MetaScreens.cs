@@ -108,12 +108,13 @@ public static class MetaScreens
                 (v.Columns ?? []).Select((c, ci) => Cell(c, r[ci])).ToList())).ToList(), v.Total)));
 
     /// <summary>Lỗi cấu hình form (SQL không chạy được trên web chỉ đọc): vẫn là screen để FE mở thành tab.</summary>
-    public static string ConfigError(string formName, string? para, string title, string note) =>
+    /// <summary>Màn lỗi cấu hình form. Không bao giờ in chi tiết (SQL, tên cột): chỉ mã lỗi để tra nhật ký.</summary>
+    public static string ConfigError(string formName, string? para, string title, string traceId) =>
         ScreenRenderer.Render(new ScreenModel(formName, FormTypes.Custom, string.IsNullOrEmpty(para) ? formName : $"{formName}_{para}", title,
             Para: string.IsNullOrEmpty(para) ? null : para), w =>
         {
             w.Element("p", "Màn hình này chưa mở được trên bản web vì cấu hình form có phần web chưa hỗ trợ. Vui lòng dùng ERP WinForms.").Line();
-            w.Element("p", note).Line();
+            w.Element("p", $"Mã lỗi: {traceId}").Line();
         });
 
     private static GridModel Grid(string id, IReadOnlyList<ViewColumn> columns, IReadOnlyList<object?[]> rows, IReadOnlyList<string> keys,

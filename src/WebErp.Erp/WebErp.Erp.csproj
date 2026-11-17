@@ -12,6 +12,8 @@
   </ItemGroup>
   <ItemGroup>
     <!-- Tep mo ta form viet tay (overlay), doc luc chay. -->
+    <!-- Ten lop form viet tay cua ban TinPhong (chi ten, khong co ma). -->
+    <EmbeddedResource Include="Metadata\hand-coded-forms.txt" LogicalName="WebErp.HandCodedForms.txt" />
     <EmbeddedResource Include="Metadata\Overlays\*.json" LogicalName="WebErp.Overlays.%(Filename)%(Extension)" />
     <!-- Migration schema web (QĐ-02), chạy bằng lệnh quản trị. -->
     <EmbeddedResource Include="WebSchema\Migrations\*.sql" LogicalName="WebErp.Migrations.%(Filename)%(Extension)" />

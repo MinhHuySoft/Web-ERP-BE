@@ -49,7 +49,7 @@ public static partial class ScreenEndpoints
     private static async Task<IResult> ReportAsync(HttpContext ctx, string formName, string? para, MenuService menu, TimeProvider time)
     {
         var o = await OpenAsync(ctx, formName, para, menu, time);
-        return o.Stop ?? HtmlResults.Page(BasicScreens.NotAvailable(o.Node!.Entry.FormName!, o.Node.Entry.Para, true, o.Node.Entry.Caption));
+        return o.Stop ?? NotAvailable(ctx, o.Node!, null);
     }
 
     private static async Task<IResult> ListAsync(HttpContext ctx, string formName, string? para, MenuService menu, TimeProvider time, IErpScreens screens)
@@ -112,7 +112,7 @@ public static partial class ScreenEndpoints
             ScreenStatus.Ok => HtmlResults.Page(MetaScreens.Lookup(v, o.Node!.Entry.Caption)),
             ScreenStatus.Forbidden => HtmlResults.Error(StatusCodes.Status403Forbidden, "Không có quyền", ErpMessage.Error("Bạn không có quyền tra cứu ở màn hình này.")),
             ScreenStatus.ConfigError => LogConfigError(ctx, o.Node!, v.Note) ?? HtmlResults.Error(StatusCodes.Status422UnprocessableEntity, "Không tra cứu được",
-                ErpMessage.Error("Nguồn tra cứu của ô này có phần web chưa hỗ trợ. " + (v.Note ?? ""))),
+                ErpMessage.Error($"Nguồn tra cứu của ô này có phần web chưa hỗ trợ. Mã lỗi: {ctx.TraceIdentifier}")),
             _ => HtmlResults.Error(StatusCodes.Status404NotFound, "Không tìm thấy", ErpMessage.Error("Ô này không có tra cứu trên web.")),
         };
     }
@@ -155,20 +155,41 @@ public static partial class ScreenEndpoints
     }
 
     /// <summary>
-    /// Ghi cảnh báo khi cấu hình form có SQL web không chạy được, để đếm được trong Event Log (trang vẫn trả 200 để FE mở thành tab).
-    /// Chỉ ghi công ty, form, mã lỗi SQL và TraceId: thông điệp của SQL Server có thể chứa giá trị dữ liệu (vd lỗi đổi kiểu) nên bỏ.
+    /// Ghi cảnh báo khi cấu hình form có SQL web không chạy được, để đếm và sửa được qua Event Log (trang vẫn trả 200 để FE mở thành tab).
+    /// Ghi chú do tầng Erp dựng (<c>SqlErrorText</c>): lỗi tên đối tượng ghi nguyên văn (cột / bảng nào sai), lỗi có thể chứa dữ liệu
+    /// khách chỉ có mã; kèm slot và bảng chính. Không bao giờ có tham số. Trình duyệt chỉ nhận mã lỗi (TraceId).
     /// </summary>
     private static IResult? LogConfigError(HttpContext ctx, MenuNode node, string? note)
     {
         var s = ErpSession.From(ctx);
-        var reason = note ?? "";
-        var sql = reason.IndexOf("): ", StringComparison.Ordinal);
-        if (reason.Contains("(SQL ", StringComparison.Ordinal) && sql > 0) reason = reason[..(sql + 1)];
-        ctx.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("WebErp.Screens").LogWarning(
+        Log(ctx).LogWarning(
             "Màn {Form}{Para} của công ty {Tenant} lỗi cấu hình: {Reason} (TraceId {TraceId}, đường dẫn {Path}).",
-            node.Entry.FormName, string.IsNullOrEmpty(node.Entry.Para) ? "" : "_" + node.Entry.Para, s?.Tenant.Key, reason, ctx.TraceIdentifier,
+            node.Entry.FormName, string.IsNullOrEmpty(node.Entry.Para) ? "" : "_" + node.Entry.Para, s?.Tenant.Key, note ?? "", ctx.TraceIdentifier,
             ctx.Request.Path.Value);
         return null;
+    }
+
+    /// <summary>
+    /// Ghi log mỗi lần mở màn chưa có trên web (đếm nhu cầu để xếp ưu tiên làm form). <paramref name="mismatch"/>: bản web có nhưng DB
+    /// của công ty thiếu bảng / cột (ghi Warning kèm tên cột).
+    /// </summary>
+    private static void LogNotAvailable(HttpContext ctx, MenuNode node, string? mismatch)
+    {
+        var s = ErpSession.From(ctx);
+        var para = string.IsNullOrEmpty(node.Entry.Para) ? "" : "_" + node.Entry.Para;
+        if (mismatch is null)
+            Log(ctx).LogInformation("Mở màn chưa có trên web: {Form}{Para} (menu {MenuId}), công ty {Tenant}.", node.Entry.FormName, para, node.Entry.MenuId, s?.Tenant.Key);
+        else
+            Log(ctx).LogWarning("Màn {Form}{Para} có bản web nhưng DB công ty {Tenant} không khớp, chưa mở được: {Missing}.", node.Entry.FormName, para, s?.Tenant.Key, mismatch);
+    }
+
+    private static ILogger Log(HttpContext ctx) => ctx.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("WebErp.Screens");
+
+    private static IResult NotAvailable(HttpContext ctx, MenuNode node, string? mismatch)
+    {
+        LogNotAvailable(ctx, node, mismatch);
+        return HtmlResults.Page(BasicScreens.NotAvailable(node.Entry.FormName!, node.Entry.Para, node.Kind == MenuKind.Report, node.Entry.Caption,
+            forThisCompany: mismatch is not null));
     }
 
     private static IResult Fallback(HttpContext ctx, ScreenStatus status, MenuNode node, string? note) => status switch
@@ -176,8 +197,9 @@ public static partial class ScreenEndpoints
         ScreenStatus.NotFound => HtmlResults.Error(StatusCodes.Status404NotFound, "Không tìm thấy", ErpMessage.Error("Không tìm thấy chứng từ này, hoặc bạn không được xem.")),
         ScreenStatus.Forbidden => HtmlResults.Error(StatusCodes.Status403Forbidden, "Không có quyền", ErpMessage.Error("Bạn không có quyền mở màn hình này.")),
         ScreenStatus.ConfigError => LogConfigError(ctx, node, note)
-            ?? HtmlResults.Page(MetaScreens.ConfigError(node.Entry.FormName!, node.Entry.Para, node.Entry.Caption, note ?? "")),
-        _ => HtmlResults.Page(BasicScreens.NotAvailable(node.Entry.FormName!, node.Entry.Para, node.Kind == MenuKind.Report, node.Entry.Caption)),
+            ?? HtmlResults.Page(MetaScreens.ConfigError(node.Entry.FormName!, node.Entry.Para, node.Entry.Caption, ctx.TraceIdentifier)),
+        ScreenStatus.SchemaMismatch => NotAvailable(ctx, node, note ?? ""),
+        _ => NotAvailable(ctx, node, null),
     };
 
     private static IResult NotFound() =>

@@ -50,6 +50,24 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
 
     internal static bool IsSecret(string column) => SecretColumn().IsMatch(column);
 
+    /// <summary>
+    /// Form viết tay dựng theo tệp mô tả: DB của công ty có đủ bảng / cột tệp đó cần không (<see cref="OverlaySchema"/>). Trả mô tả phần
+    /// thiếu, null nếu đủ hoặc form không dùng tệp mô tả.
+    /// </summary>
+    private async Task<string?> OverlayMismatchAsync(ScreenRequest req, IEnumerable<SlotMeta> slots, CancellationToken ct)
+    {
+        if (!FormOverlays.Has(req.FormName)) return null;
+        var parts = new List<string>();
+        foreach (var slot in slots)
+        {
+            if (await OverlaySchema.MissingAsync(slot, t => metadata.GetColumnsAsync(req.Tenant, t, ct)) is { } m) parts.Add($"{slot.Id}: {m}");
+        }
+        return parts.Count == 0 ? null : string.Join(" | ", parts);
+    }
+
+    /// <summary>Ghi chú lỗi cấu hình kèm slot / bảng chính để tra log.</summary>
+    private static string Where(string note, SlotMeta slot) => $"{note} [{slot.Id}, bảng {slot.Source}]";
+
     /// <summary>Form viết tay chưa có tệp mô tả (<see cref="FormOverlays"/>): web chưa dựng được.</summary>
     private static bool IsHandCodedWithoutOverlay(string formName) => HandCodedForms.Names.Contains(formName) && !FormOverlays.Has(formName);
 
@@ -62,6 +80,7 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
             return new ListView(ScreenStatus.Ok, form);
         }
         if (form?.Master is not { } slot || IsHandCodedWithoutOverlay(req.FormName)) return new ListView(ScreenStatus.NotSupported, form);
+        if (await OverlayMismatchAsync(req, [slot], ct) is { } mismatch) return new ListView(ScreenStatus.SchemaMismatch, form, Note: mismatch);
         var ctx = await ContextAsync(req, form, ct);
         var src = await metadata.GetColumnsAsync(req.Tenant, slot.Source, ct);
 
@@ -110,13 +129,15 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
                 data.Rows.Select(row => keyIndex < 0 ? "" : Invariant(row[keyIndex])).ToList(),
                 total, sums, filters, keyIndex >= 0 ? slot.PrimaryKey : null, form.IsEdit && keyIndex >= 0,
                 Page: page, PageSize: paged ? take : 0, GroupBy: GroupBy(slot, cols), Tabs: tabs);
-        }, e => new ListView(ScreenStatus.ConfigError, form, Note: e), ct);
+        }, e => new ListView(ScreenStatus.ConfigError, form, Note: Where(e, slot)), ct);
     }
 
     public async Task<RecordView> OpenRecordAsync(ScreenRequest req, string key, CancellationToken ct)
     {
         var form = await metadata.GetFormAsync(req.Tenant, req.FormName, req.RuntimeName, ct);
         if (form?.Master is not { } slot || !form.IsEdit || IsHandCodedWithoutOverlay(req.FormName)) return new RecordView(ScreenStatus.NotSupported, form);
+        if (await OverlayMismatchAsync(req, [slot, .. form.Details.Where(d => !d.Independent && !d.Optional)], ct) is { } mismatch)
+            return new RecordView(ScreenStatus.SchemaMismatch, form, key, Note: mismatch);
         var ctx = await ContextAsync(req, form, ct);
         var src = await metadata.GetColumnsAsync(req.Tenant, slot.Source, ct);
 
@@ -137,7 +158,7 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
             {
                 CanDesignLayout = ctx.Perm.Admin && FormOverlays.Get(req.FormName, req.Para) is not { UseDbConfig: false },
             };
-        }, e => new RecordView(ScreenStatus.ConfigError, form, key, Note: e), ct);
+        }, e => new RecordView(ScreenStatus.ConfigError, form, key, Note: Where(e, slot)), ct);
     }
 
     public async Task<DetailView> OpenDetailAsync(ScreenRequest req, string key, string slotId, CancellationToken ct)
@@ -148,6 +169,7 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
         if (form?.Master is not { } slot || !form.IsEdit && detail?.Independent != true || IsHandCodedWithoutOverlay(req.FormName))
             return new DetailView(ScreenStatus.NotSupported);
         if (detail is null) return new DetailView(ScreenStatus.NotFound);
+        if (await OverlayMismatchAsync(req, [slot, detail], ct) is { } mismatch) return new DetailView(ScreenStatus.SchemaMismatch, Note: mismatch);
         var ctx = await ContextAsync(req, form, ct);
         if (!DetailVisible(ctx, form, detail)) return new DetailView(ScreenStatus.Forbidden);
         var src = await metadata.GetColumnsAsync(req.Tenant, slot.Source, ct);
@@ -185,7 +207,7 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
                 data.Rows.Select(row => keyIndex < 0 ? "" : Invariant(row[keyIndex])).ToList(), data.Rows.Count,
                 cols.Where(x => x.Col.Sum).ToDictionary(x => x.Col.Field, x => SumRows(data.Rows, x.Index), StringComparer.OrdinalIgnoreCase),
                 keyIndex >= 0 ? detail.PrimaryKey : null, GroupBy: GroupBy(detail, cols));
-        }, e => new DetailView(ScreenStatus.ConfigError, Note: e), ct);
+        }, e => new DetailView(ScreenStatus.ConfigError, Note: Where(e, detail)), ct);
     }
 
     // ---------------------------------------------------------------- ngữ cảnh, token
@@ -714,7 +736,7 @@ public sealed partial class ErpScreens(ErpConnectionFactory connections, ErpMeta
         }
         catch (SqlException ex)
         {
-            return configError($"Câu truy vấn dựng từ cấu hình form bị lỗi (SQL {ex.Number}): {ex.Message}");
+            return configError($"Câu truy vấn dựng từ cấu hình form bị lỗi ({SqlErrorText.Describe(ex)})");
         }
         finally
         {
