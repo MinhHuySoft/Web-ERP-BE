@@ -1,4 +1,5 @@
 using System.Net;
+using WebErp.Core.Metadata;
 
 namespace WebErp.Tests.Host;
 
@@ -65,12 +66,42 @@ public sealed class ScreenTests(HostFixture f)
     {
         using var c = f.Client();
         Assert.Equal(HttpStatusCode.SeeOther, (await HostFixture.LoginAsync(c, "admin", "123")).StatusCode);
-        Assert.Contains("chưa mở được trên bản web", await Get(c, "/erp/screens/NguoiDungFrm"));
-        var log = Assert.Single(f.Logs.Entries, e => e.Category == "WebErp.Screens" && e.Message.Contains("NguoiDungFrm", StringComparison.Ordinal));
+        var page = await Get(c, "/erp/screens/NguoiDungFrm");
+        Assert.Contains("chưa mở được trên bản web", page);
+        Assert.Contains("Mã lỗi:", page);
+        Assert.DoesNotContain("SQL", page); // trình duyệt không bao giờ thấy chi tiết lỗi SQL
+        var log = Assert.Single(f.Logs.Entries, e => e.Category == "WebErp.Screens" && e.Message.Contains("NguoiDungFrm", StringComparison.Ordinal)
+                                                     && e.Message.Contains("SQL 245", StringComparison.Ordinal));
         Assert.Equal(Microsoft.Extensions.Logging.LogLevel.Warning, log.Level);
-        Assert.Contains("(SQL 245)", log.Message);
         Assert.Contains("MC", log.Message);
+        Assert.Contains("[T0, bảng SY_User]", log.Message);
         Assert.DoesNotContain("GIA-TRI-RIENG", log.Message);
+    }
+
+    [Fact]
+    public async Task Schema_error_logs_column_name_but_page_does_not()
+    {
+        using var c = f.Client();
+        Assert.Equal(HttpStatusCode.SeeOther, (await HostFixture.LoginAsync(c, "admin", "123")).StatusCode);
+        f.Erp.NextList = new ListView(ScreenStatus.ConfigError,
+            Note: "Câu truy vấn dựng từ cấu hình form bị lỗi (SQL 207: Invalid column name 'TenNgan'.) [T0, bảng SY_User]");
+        var page = await Get(c, "/erp/screens/NguoiDungFrm");
+        Assert.DoesNotContain("TenNgan", page);
+        Assert.Contains(f.Logs.Entries, e => e.Category == "WebErp.Screens" && e.Message.Contains("Invalid column name 'TenNgan'", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Web_version_not_matching_company_database_is_not_available_for_this_company()
+    {
+        using var c = f.Client();
+        Assert.Equal(HttpStatusCode.SeeOther, (await HostFixture.LoginAsync(c, "admin", "123")).StatusCode);
+        f.Erp.NextList = new ListView(ScreenStatus.SchemaMismatch, Note: "T0: thiếu cột SY_User.CeoID, SY_User.TenNgan");
+        var page = await Get(c, "/erp/screens/NguoiDungFrm");
+        Assert.Contains("chưa có trên bản web cho dữ liệu của công ty này", page);
+        Assert.DoesNotContain("CeoID", page);
+        var log = Assert.Single(f.Logs.Entries, e => e.Category == "WebErp.Screens" && e.Message.Contains("SY_User.CeoID", StringComparison.Ordinal));
+        Assert.Equal(Microsoft.Extensions.Logging.LogLevel.Warning, log.Level);
+        Assert.Contains("MC", log.Message);
     }
 
     [Fact]
@@ -79,6 +110,9 @@ public sealed class ScreenTests(HostFixture f)
         using var c = f.Client();
         Assert.Equal(HttpStatusCode.SeeOther, (await HostFixture.LoginAsync(c, "admin", "123")).StatusCode);
         Assert.Contains("chưa có trên bản web", await Get(c, "/erp/screens/CS_ReceiptFrm?para=Bank"));
+        // Mỗi lần mở màn chưa có trên web được ghi lại (form, menu, công ty) để xếp ưu tiên.
+        Assert.Contains(f.Logs.Entries, e => e.Category == "WebErp.Screens" && e.Message.Contains("Mở màn chưa có trên web: CS_ReceiptFrm_Bank", StringComparison.Ordinal)
+                                             && e.Message.Contains("0901", StringComparison.Ordinal));
         await Get(c, "/erp/screens/AP_KhongCoTrongMenuFrm", HttpStatusCode.Forbidden);
         await Get(c, "/erp/screens/AP_KhongCoTrongMenuFrm/1", HttpStatusCode.Forbidden);
     }

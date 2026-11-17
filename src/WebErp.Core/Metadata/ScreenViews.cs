@@ -52,7 +52,9 @@ public sealed record ViewColumn(string Field, string Title, string Type, int? De
 public sealed record ViewFilter(string Name, string Caption, string Control, string? Value, IReadOnlyList<(string Value, string Text)>? Options = null);
 
 /// <summary><c>ConfigError</c>: cấu hình form có SQL web không chạy được (lệnh ghi, token lạ, lỗi cú pháp); chi tiết ở <c>Note</c>.</summary>
-public enum ScreenStatus { Ok, NotSupported, NotFound, Forbidden, ConfigError }
+/// <param name="SchemaMismatch">Form có bản web riêng (tệp mô tả form viết tay) nhưng DB của công ty thiếu bảng / cột mà bản đó cần:
+/// coi như "chưa có trên web cho dữ liệu của công ty này", không chạy câu truy vấn.</param>
+public enum ScreenStatus { Ok, NotSupported, NotFound, Forbidden, ConfigError, SchemaMismatch }
 
 /// <summary>Kết quả mở màn danh sách.</summary>
 /// <param name="Rows">Giá trị thô theo thứ tự <see cref="Columns"/>.</param>
