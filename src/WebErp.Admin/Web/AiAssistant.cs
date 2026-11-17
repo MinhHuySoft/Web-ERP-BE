@@ -88,8 +88,11 @@ public sealed class AiAssistant(SqliteTenantStore store, ILogger<AiAssistant> lo
         You map a hand-coded ERP WinForms form to the SQL Server tables it most likely reads, so a read-only web screen can be built.
         You get the form's class name, its Vietnamese menu caption, and candidate tables with their columns (name, SQL type, primary key flag, Vietnamese caption).
         Choose ONLY tables and columns from the list. Prefer the table whose name matches the form (e.g. AR_OrderFrm -> AR_OrderTbl) and, for document forms,
-        a detail table (e.g. AR_OrderDetailTbl) linked by a column holding the master's key. Pick 6-15 useful columns per table for a list grid
-        (codes, names, dates, amounts, status, notes), in a sensible order. Sort documents by their date column, newest first.
+        a detail table (e.g. AR_OrderDetailTbl) linked by a column holding the master's key. The web screen reads EVERY column of each table, like the
+        ERP grid; "columns" only lists the ones shown by default, in a sensible order. Include every column a user of this ERP screen would normally
+        look at (codes, dates, customer / item / employee codes, quantities, prices, amounts, VAT, discounts, status, notes), typically 15-30 per table;
+        leave out only technical columns (row ids, sync flags, created/updated by). Sort documents by their date column, newest first.
+        Code columns (ObjectID, ItemID…) get their names from catalog tables automatically; do not pick catalog tables as details.
         Answer with ONE JSON object and nothing else:
         {"caption": "screen title in Vietnamese",
          "master": {"table": "...", "primaryKey": "...", "columns": ["..."], "sortColumn": "... or null", "sortDesc": true},

@@ -18,7 +18,7 @@ public static class QuickEndpoints
 {
     public const string RecordId = "rec-quick";
     public const int MaxDetails = 3;
-    private const int DefaultColumns = 12;
+    private const int DefaultColumns = 20;
 
     public static void MapQuick(this IEndpointRouteBuilder app)
     {
@@ -30,6 +30,7 @@ public static class QuickEndpoints
         g.MapPost("/quick/preview", (HttpContext ctx, Deps d) => PostAsync(ctx, d, Op.Preview));
         g.MapPost("/quick/json", (HttpContext ctx, Deps d) => PostAsync(ctx, d, Op.Json));
         g.MapPost("/quick/save", (HttpContext ctx, Deps d) => PostAsync(ctx, d, Op.Save));
+        g.MapPost("/quick/template", (HttpContext ctx, Deps d) => PostAsync(ctx, d, Op.Template));
         g.MapGet("/ai-settings", async (HttpContext ctx, Deps d) => HtmlResults.Page(await AiDialogAsync(ctx, d, null)));
         g.MapPost("/ai-settings", SaveAiAsync);
     }
@@ -44,7 +45,7 @@ public static class QuickEndpoints
         public ConfigWriter Writer(HttpContext ctx) => Forms.Writer(ctx);
     }
 
-    private enum Op { Refresh, Guess, Ai, Preview, Json, Save }
+    private enum Op { Refresh, Guess, Ai, Preview, Json, Save, Template }
 
     /// <summary>Lựa chọn cho một bảng (chính hoặc chi tiết). <see cref="Prev"/>: bảng lúc vẽ trang trước, để biết người dùng vừa đổi bảng.</summary>
     private sealed class Pick
@@ -59,6 +60,15 @@ public static class QuickEndpoints
         public string? DetailKey;
         public List<string> Columns = [];
         public IReadOnlyList<DbColumn> Schema = [];
+
+        /// <summary>Bảng danh mục tìm được cho các cột mã của bảng này (tên thay mã).</summary>
+        public IReadOnlyList<QuickLookup> Available = [];
+
+        /// <summary>Cột mã người dùng giữ tên thay mã; null = chưa chọn (mặc định dùng hết).</summary>
+        public HashSet<string>? LookupOn;
+
+        public IReadOnlyList<QuickLookup> Lookups =>
+            Available.Where(l => LookupOn is null || LookupOn.Contains(l.Column)).Take(QuickSlot.MaxLookups).ToList();
     }
 
     private sealed class State
@@ -134,6 +144,19 @@ public static class QuickEndpoints
                     break;
             }
             await LoadAsync(d, t, s, ctx.RequestAborted);
+            if (op == Op.Template)
+            {
+                var from = f["Template"].ToString();
+                if (FormOverlays.BuiltInForTable(s.Master.Table).Contains(from, StringComparer.OrdinalIgnoreCase)
+                    && FormOverlays.TemplateJson(from, s.Form) is { } templ)
+                    return FormEndpoints.JsonEditor(ctx, d.Forms, s.Form, s.AllCompanies ? null : t.Key, templ,
+                    [
+                        ErpMessage.Info($"Chép từ mô tả có sẵn {from}: đủ cột, tab chi tiết, tên thay mã và bố cục ERP như form đó. " +
+                                        $"Bấm \"Kiểm trên DB công ty\", thêm tab riêng của {s.Form} nếu cần, rồi Lưu."),
+                    ]);
+                messages.Add(ErpMessage.Error("Chọn một mô tả có sẵn cùng bảng chính."));
+                status = StatusCodes.Status422UnprocessableEntity;
+            }
             if (op is Op.Preview or Op.Json or Op.Save)
             {
                 var (spec, error) = Spec(s);
@@ -242,6 +265,19 @@ public static class QuickEndpoints
     /// <summary>Nạp cột của các bảng đã chọn; bảng vừa đổi thì chọn sẵn khóa chính, sắp xếp, cột nối và vài cột hiển thị.</summary>
     private static async Task LoadAsync(Deps d, Tenant t, State s, CancellationToken ct)
     {
+        // Bảng vừa đổi (khác bảng đã nạp lần trước): bỏ lựa chọn tên thay mã cũ, mặc định dùng hết.
+        var changed = new[] { s.Master }.Concat(s.Details).Where(p => !string.Equals(p.Prev, p.Table, StringComparison.OrdinalIgnoreCase)).ToList();
+        await LoadTablesAsync(d, t, s, ct);
+        var objects = await d.Schema.ObjectsAsync(t, ct);
+        foreach (var p in new[] { s.Master }.Concat(s.Details))
+        {
+            p.Available = p.Table.Length == 0 ? [] : await d.Schema.LookupsAsync(t, p.Table, p.Schema, objects, ct);
+            if (changed.Contains(p)) p.LookupOn = null;
+        }
+    }
+
+    private static async Task LoadTablesAsync(Deps d, Tenant t, State s, CancellationToken ct)
+    {
         if (s.Master.Table.Length > 0)
         {
             var m = s.Master;
@@ -300,12 +336,12 @@ public static class QuickEndpoints
             if (x.Table.Length == 0) { n++; continue; }
             if (x.Pk is null || x.MasterKey is null || x.DetailKey is null) return (null, $"Tab chi tiết {n}: chọn khóa chính và hai cột nối.");
             if (x.Columns.Count == 0) return (null, $"Tab chi tiết {n}: tích ít nhất một cột.");
-            details.Add(new QuickSlot(x.Table, x.Pk, x.Columns, null, true, x.Caption, x.MasterKey, x.DetailKey));
+            details.Add(new QuickSlot(x.Table, x.Pk, x.Columns, null, true, x.Caption, x.MasterKey, x.DetailKey, x.Lookups));
             n++;
         }
         var caption = string.IsNullOrWhiteSpace(s.Caption) ? s.Form : s.Caption.Trim();
         return (new QuickSpec(s.Form, caption, details.Count > 0 ? "EDIT" : s.FormType, s.Top,
-            new QuickSlot(m.Table, m.Pk, m.Columns, m.Sort, m.Desc), details), null);
+            new QuickSlot(m.Table, m.Pk, m.Columns, m.Sort, m.Desc, Lookups: m.Lookups), details), null);
     }
 
     private static State Read(IFormCollection f)
@@ -321,6 +357,11 @@ public static class QuickEndpoints
             };
             var prefix = $"{p}.Col.";
             x.Columns = f.Keys.Where(k => k.StartsWith(prefix, StringComparison.Ordinal) && f[k].LastOrDefault() == "true").Select(k => k[prefix.Length..]).ToList();
+            // Ô tích tên thay mã: có trên trang trước thì theo lựa chọn; chưa có (lần đầu) thì null = dùng hết.
+            var lk = $"{p}.Lk.";
+            var lkKeys = f.Keys.Where(k => k.StartsWith(lk, StringComparison.Ordinal)).ToList();
+            if (lkKeys.Count > 0)
+                x.LookupOn = lkKeys.Where(k => f[k].LastOrDefault() == "true").Select(k => k[lk.Length..]).ToHashSet(StringComparer.OrdinalIgnoreCase);
             return x;
         }
         return new State
@@ -378,8 +419,22 @@ public static class QuickEndpoints
             new("M.Sort", "Sắp xếp theo", "select", m.Sort ?? "", Span: 14, RowStart: true, Options: ColOptions(m.Schema, true)),
             new("M.Desc", "Mới nhất / lớn nhất trước", "checkbox", m.Desc ? "true" : "false", Span: 14),
         };
+        master.AddRange(LookupChecks("M", m));
         master.AddRange(Checks("M", m));
-        var tabs = new List<FieldsetModel> { new("Thông tin chung", head), new("Bảng chính (T0)", master) };
+        var tabs = new List<FieldsetModel> { new("Thông tin chung", head) };
+        // Bảng chính đã có mô tả nhúng (vd AR_InvoiceTbl ↔ AR_InvoiceFrm): nên chép mô tả đó (đủ tab, tên thay mã, bố cục ERP).
+        var templates = m.Table.Length == 0 ? [] : FormOverlays.BuiltInForTable(m.Table).Where(x => !x.Equals(s.Form, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (templates.Count > 0)
+        {
+            tabs.Add(new FieldsetModel("Dựa theo mô tả có sẵn",
+            [
+                new FieldModel("Template", "Mô tả có sẵn cùng bảng chính", "select", templates[0], Span: 20, Options: templates.Select(x => (x, x)).ToList(),
+                    Hint: "Bấm \"Dùng mô tả có sẵn\" để chép: đủ cột, các tab chi tiết, tên thay mã và bố cục như form đó trên web."),
+            ]));
+            messages = [.. messages, ErpMessage.Info($"Bảng {m.Table} đã có mô tả {string.Join(", ", templates)} trong BE (đủ tab, tên thay mã, bố cục ERP). " +
+                                                     "Nên bấm \"Dùng mô tả có sẵn\" thay vì chọn tay.")];
+        }
+        tabs.Add(new FieldsetModel("Bảng chính (T0)", master));
         for (var i = 0; i < MaxDetails; i++)
         {
             var x = s.Details[i];
@@ -395,6 +450,7 @@ public static class QuickEndpoints
                 fields.Add(new FieldModel($"{p}.Pk", "Khóa chính", "select", x.Pk ?? "", Span: 10, RowStart: true, Options: ColOptions(x.Schema, false)));
                 fields.Add(new FieldModel($"{p}.MK", "Cột nối ở bảng chính", "select", x.MasterKey ?? "", Span: 15, Options: ColOptions(m.Schema, true)));
                 fields.Add(new FieldModel($"{p}.DK", "Cột nối ở bảng chi tiết", "select", x.DetailKey ?? "", Span: 15, Options: ColOptions(x.Schema, true)));
+                fields.AddRange(LookupChecks(p, x));
                 fields.AddRange(Checks(p, x));
             }
             if (i == 0 || x.Table.Length > 0 || s.Details[i - 1].Table.Length > 0) tabs.Add(new FieldsetModel($"Tab chi tiết {i + 1} (T{i + 1})", fields));
@@ -415,6 +471,8 @@ public static class QuickEndpoints
             new("custom", "Sửa JSON", Form: RecordId, FormAction: ctx.Url("/admin/forms/quick/json"), Icon: "key"),
             new("cancel", "Về danh sách", Href: ctx.Url("/admin/forms"), Target: "self"),
         };
+        if (templates.Count > 0)
+            toolbar.Insert(1, new ToolbarItem("custom", "Dùng mô tả có sẵn", Form: RecordId, FormAction: ctx.Url("/admin/forms/quick/template"), Icon: "key"));
         if (d.Schema.CaptionsPending(t))
             messages = [.. messages, ErpMessage.Info("Tiêu đề tiếng Việt của cột đang nạp (máy chủ SQL đang chậm), tạm hiện tên cột. Bấm \"Nạp lại cột\" sau ít giây.")];
         return ScreenRenderer.Render(new ScreenModel("AdminForms", FormTypes.Edit, $"AdminForms:quick:{s.Form}:{t.Key}", $"Tạo nhanh {s.Form} — {t.Key}",
@@ -431,6 +489,20 @@ public static class QuickEndpoints
                     Caption: p.Error is null ? $"Xem thử {p.Slot} — {p.Table}: {p.Rows.Count} dòng" : $"{p.Slot} — {p.Table}: {p.Error}"));
             }
         });
+    }
+
+    /// <summary>Ô tích "tên thay mã" cho từng cột mã có bảng danh mục (tối đa <see cref="QuickSlot.MaxLookups"/> được dùng).</summary>
+    private static IEnumerable<FieldModel> LookupChecks(string prefix, Pick p)
+    {
+        var on = p.Lookups.Select(l => l.Column).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var first = true;
+        foreach (var l in p.Available)
+        {
+            yield return new FieldModel($"{prefix}.Lk.{l.Column}", $"Tên thay mã: {l.Column} → {l.Table} ({string.Join(", ", l.Show)})", "checkbox",
+                on.Contains(l.Column) ? "true" : "false", Span: 20, RowStart: first,
+                Hint: first ? $"Hiện thêm tên từ bảng danh mục, như ERP. Tối đa {QuickSlot.MaxLookups} bảng." : null);
+            first = false;
+        }
     }
 
     private static IEnumerable<FieldModel> Checks(string prefix, Pick p)
