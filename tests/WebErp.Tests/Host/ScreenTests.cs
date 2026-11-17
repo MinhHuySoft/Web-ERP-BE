@@ -91,6 +91,19 @@ public sealed class ScreenTests(HostFixture f)
     }
 
     [Fact]
+    public async Task Dropped_display_columns_are_logged_and_screen_opens()
+    {
+        using var c = f.Client();
+        Assert.Equal(HttpStatusCode.SeeOther, (await HostFixture.LoginAsync(c, "admin", "123")).StatusCode);
+        f.Erp.NextList = SampleScreens.List() with { Note = "bỏ cột DB không có: T0: SY_User.TenNgan" };
+        var page = await Get(c, "/erp/screens/NguoiDungFrm");
+        Assert.Contains("data-erp=\"grid\"", page);
+        Assert.DoesNotContain("TenNgan", page);
+        var log = Assert.Single(f.Logs.Entries, e => e.Category == "WebErp.Screens" && e.Message.Contains("bỏ cột DB không có: T0: SY_User.TenNgan", StringComparison.Ordinal));
+        Assert.Equal(Microsoft.Extensions.Logging.LogLevel.Information, log.Level);
+    }
+
+    [Fact]
     public async Task Web_version_not_matching_company_database_is_not_available_for_this_company()
     {
         using var c = f.Client();

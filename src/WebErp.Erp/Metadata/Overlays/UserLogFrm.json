@@ -1,6 +1,8 @@
 // User log. Nguồn: Tools.SysForm/UserLogFrm.cs:610-692 (SetData 618-619, TopRecord 648, ẩn log System 691).
 // Che Note của thao tác trên form người dùng: WinForms ghi mọi giá trị cột của dòng (kể cả hash mật khẩu) vào Note
-// (Tools/FormControler.cs:2805-2849). Không bao giờ lấy DataValue (XML cả bản ghi). Tab "Daily log" chưa làm.
+// (Tools/FormControler.cs:2805-2849). Không bao giờ lấy DataValue (XML cả bản ghi).
+// T2 "Daily log" (UserLogFrm.cs:733-777): mọi thao tác của mọi người, mới nhất trước. Web chưa có ô lọc ngày / người / từ khóa của
+// tab này (lọc trên lưới), lấy 1000 dòng mới nhất; bỏ log System như mặc định WinForms; che Note của form người dùng / đổi mật khẩu.
 {
   "form": "UserLogFrm",
   "formType": "EDIT",
@@ -34,6 +36,17 @@
       "SO": "{Mod}_UserLogDetail.LogDate DESC",
       "HDE": "LogID;FormID",
       "GD2": "LogDate;VN;Para;Note"
+    },
+    "T2": {
+      "IND": "1",
+      "TN": "DailyLog",
+      "PK": "UserAutoID",
+      "DCP": "Daily log",
+      "FRM": "(SELECT A.UserAutoID, B.UserName, A.LogDate, CONVERT(VARCHAR(10), A.LogDate, 111) AS LogDay, COALESCE(M.VN, A.FormID) AS VN, A.Para, CASE WHEN A.FormID LIKE '%NguoiDung%' OR A.FormID LIKE '%ChangePassword%' THEN NULL ELSE A.Note END AS Note, LEFT(A.FormID, 2) AS ModuleID, B.ComputerName FROM {Mod}_UserLogDetail A INNER JOIN {Mod}_UserLog B ON A.LogID = B.UserAutoID LEFT JOIN (SELECT FormName, MAX(VN) AS VN FROM {Mod}_Menu GROUP BY FormName) M ON A.FormID = M.FormName WHERE A.FormID <> 'System') DailyLog",
+      "SO": "DailyLog.LogDate DESC",
+      "TRS": "1000",
+      "HDE": "UserAutoID",
+      "GD2": "LogDay;LogDate;UserName;VN;Para;Note;ModuleID;ComputerName"
     }
   }
 }

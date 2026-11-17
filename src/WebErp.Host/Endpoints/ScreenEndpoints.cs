@@ -57,6 +57,7 @@ public static partial class ScreenEndpoints
         var o = await OpenAsync(ctx, formName, para, menu, time);
         if (o.Stop is not null) return o.Stop;
         var v = await screens.OpenListAsync(Request(ctx, o.Node!, Query(ctx)), ctx.RequestAborted);
+        if (v.Status == ScreenStatus.Ok) LogDropped(ctx, o.Node!, v.Note);
         return v.Status switch
         {
             ScreenStatus.Ok => HtmlResults.Page(MetaScreens.List(v, o.Node!.Entry.Caption, o.Node.Entry.MenuId, Urls(ctx, o.Node))),
@@ -72,6 +73,7 @@ public static partial class ScreenEndpoints
         var request = Request(ctx, o.Node!, new Dictionary<string, string>());
         var v = await screens.OpenRecordAsync(request, Key(key), ctx.RequestAborted);
         if (v.Status != ScreenStatus.Ok) return Fallback(ctx, v.Status, o.Node!, v.Note);
+        LogDropped(ctx, o.Node!, v.Note);
         var tokens = af.GetAndStoreTokens(ctx);
         var urls = Urls(ctx, o.Node!);
         // Nút In (M6) khi form có báo cáo in <Report>Stp, như nút In của WinForms.
@@ -181,6 +183,13 @@ public static partial class ScreenEndpoints
             Log(ctx).LogInformation("Mở màn chưa có trên web: {Form}{Para} (menu {MenuId}), công ty {Tenant}.", node.Entry.FormName, para, node.Entry.MenuId, s?.Tenant.Key);
         else
             Log(ctx).LogWarning("Màn {Form}{Para} có bản web nhưng DB công ty {Tenant} không khớp, chưa mở được: {Missing}.", node.Entry.FormName, para, s?.Tenant.Key, mismatch);
+    }
+
+    /// <summary>Bản web (tệp mô tả) đã bỏ cột hiển thị mà DB của công ty không có: ghi lại để bổ sung / sửa tệp mô tả.</summary>
+    private static void LogDropped(HttpContext ctx, MenuNode node, string? note)
+    {
+        if (string.IsNullOrEmpty(note)) return;
+        Log(ctx).LogInformation("Màn {Form} của công ty {Tenant}: {Note}.", node.Entry.FormName, ErpSession.From(ctx)?.Tenant.Key, note);
     }
 
     private static ILogger Log(HttpContext ctx) => ctx.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("WebErp.Screens");

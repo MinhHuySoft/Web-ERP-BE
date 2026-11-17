@@ -47,6 +47,11 @@ public static class FormOverlays
             using var doc = JsonDocument.Parse(s, new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
             var o = Parse(doc.RootElement, name);
             result[o.Form] = o;
+            // "aliases": lớp WinForms kế thừa nguyên form này (vd AR_Invoice2Frm : AR_InvoiceFrm), chỉ khác khóa cấu hình / quyền.
+            // Dùng chung mô tả nhưng FormID = tên bí danh, để SY_FrmCfg / SY_FrmLstTbl / quyền đọc theo tên đó như WinForms.
+            if (doc.RootElement.TryGetProperty("aliases", out var al) && al.ValueKind == JsonValueKind.Array)
+                foreach (var a in al.EnumerateArray().Select(x => x.GetString()).OfType<string>())
+                    result[a] = o with { Form = a };
         }
         return result;
     }

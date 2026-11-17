@@ -2,6 +2,9 @@
 // Form viết tay có đọc SY_FrmCfg (T0/T1… nếu đủ TN+PK) nên cấu hình DB đứng trước, tệp này bù phần thiếu.
 {
   "form": "AR_InvoiceFrm",
+  // AR_Invoice2Frm (TinPhong, menu 0607) là lớp con rỗng của AR_InvoiceFrm (ERP/AR_Invoice2Frm.cs): cùng giao diện và nghiệp vụ,
+  // cấu hình / quyền theo khóa AR_Invoice2Frm (MainFrm.cs:1262 đặt form.Name).
+  "aliases": ["AR_Invoice2Frm"],
   "formType": "EDIT",
   "caption": "Hóa đơn bán hàng",
   "useDbConfig": true,
