@@ -22,6 +22,32 @@ public sealed class SchemaExplorer(ErpConnectionFactory connections, ErpMetadata
 {
     public const int PreviewRows = 5;
 
+    /// <summary>Chờ tiêu đề cột tối đa chừng này; quá thì dùng tên cột, tiêu đề tiếp tục nạp nền cho lần sau.</summary>
+    public static readonly TimeSpan CaptionWait = TimeSpan.FromSeconds(5);
+
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Task<FieldFormats>> _loading = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Tiêu đề cột của công ty còn đang nạp nền (máy chủ SQL chậm): trang nên báo "bấm Nạp lại cột sau ít giây".</summary>
+    public bool CaptionsPending(Tenant tenant) => _loading.TryGetValue(tenant.Key, out var t) && !t.IsCompleted;
+
+    /// <summary>
+    /// Tiêu đề cột (<c>SY_FmtFldTbl</c>, đọc cả bảng, có bộ đệm 5 phút ở <see cref="ErpMetadata"/>). Lần đầu trên máy chủ bận có thể quá
+    /// 30 giây: chỉ chờ <see cref="CaptionWait"/>, không chặn trang; một lần nạp nền cho mỗi công ty, xong thì vào bộ đệm. Lỗi thì không có tiêu đề.
+    /// </summary>
+    private async Task<FieldFormats> FormatsAsync(Tenant tenant, CancellationToken ct)
+    {
+        var task = _loading.GetOrAdd(tenant.Key, key =>
+        {
+            var t = metadata.GetFormatsAsync(tenant, CancellationToken.None);
+            t.ContinueWith(done => done.Exception, TaskContinuationOptions.OnlyOnFaulted); // quan sát lỗi nạp nền
+            return t;
+        });
+        var finished = await Task.WhenAny(task, Task.Delay(CaptionWait, ct)) == task;
+        // Xong (được hay lỗi) thì bỏ khỏi danh sách đang nạp: lần sau đọc bộ đệm của ErpMetadata, hoặc thử nạp lại nếu lần này lỗi.
+        if (task.IsCompleted) _loading.TryRemove(new KeyValuePair<string, Task<FieldFormats>>(tenant.Key, task));
+        return finished && task.IsCompletedSuccessfully ? task.Result : FieldFormats.Empty;
+    }
+
     /// <summary>Bảng và view của người dùng (bỏ bảng hệ thống), theo tên.</summary>
     public async Task<IReadOnlyList<string>> ObjectsAsync(Tenant tenant, CancellationToken ct)
     {
@@ -48,7 +74,7 @@ public sealed class SchemaExplorer(ErpConnectionFactory connections, ErpMetadata
     /// <summary>Cột (bỏ cột bí mật), đánh dấu khóa chính, kèm tiêu đề tiếng Việt của ERP. Rỗng nếu không có bảng.</summary>
     public async Task<IReadOnlyList<DbColumn>> ColumnsAsync(Tenant tenant, string table, string formName, CancellationToken ct)
     {
-        var formats = await metadata.GetFormatsAsync(tenant, ct);
+        var formats = await FormatsAsync(tenant, ct);
         await using var c = await connections.OpenAsync(tenant, ct);
         var rows = await c.QueryAsync<(string Name, string Type, int Pk)>(new CommandDefinition(
             "SELECT c.name, t.name, CASE WHEN EXISTS (SELECT 1 FROM sys.index_columns ic JOIN sys.indexes i ON i.object_id = ic.object_id AND i.index_id = ic.index_id " +

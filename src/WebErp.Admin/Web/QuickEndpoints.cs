@@ -415,6 +415,8 @@ public static class QuickEndpoints
             new("custom", "Sửa JSON", Form: RecordId, FormAction: ctx.Url("/admin/forms/quick/json"), Icon: "key"),
             new("cancel", "Về danh sách", Href: ctx.Url("/admin/forms"), Target: "self"),
         };
+        if (d.Schema.CaptionsPending(t))
+            messages = [.. messages, ErpMessage.Info("Tiêu đề tiếng Việt của cột đang nạp (máy chủ SQL đang chậm), tạm hiện tên cột. Bấm \"Nạp lại cột\" sau ít giây.")];
         return ScreenRenderer.Render(new ScreenModel("AdminForms", FormTypes.Edit, $"AdminForms:quick:{s.Form}:{t.Key}", $"Tạo nhanh {s.Form} — {t.Key}",
             Mode: "new", Messages: messages), w =>
         {
