@@ -35,15 +35,34 @@ public sealed class FieldFormats(IReadOnlyDictionary<string, FieldFormat> global
 /// Đọc metadata form từ DB ERP của công ty, cache theo công ty + tên form (5 phút, QĐ-01: không đổi schema, đọc lúc chạy).
 /// Chỉ SELECT. Không đọc/chạy hook (ESL, EBS…) và nút lệnh.
 /// </summary>
-public sealed class ErpMetadata(ErpConnectionFactory connections, TimeProvider time)
+public sealed class ErpMetadata(ErpConnectionFactory connections, TimeProvider time, OverlayCatalog? overlays = null)
 {
     private static readonly TimeSpan Ttl = TimeSpan.FromMinutes(5);
     private readonly ConcurrentDictionary<string, (DateTimeOffset At, object Value)> _cache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly OverlayCatalog _overlays = overlays ?? new OverlayCatalog();
 
-    public async Task<FormMeta?> GetFormAsync(Tenant tenant, string formName, string runtimeName, CancellationToken ct) =>
-        await Cached($"form:{tenant.Key}:{runtimeName}", async () =>
+    /// <summary>Tệp mô tả form viết tay áp cho công ty (nhúng + sửa trên trang quản trị).</summary>
+    public ValueTask<OverlaySet> GetOverlaysAsync(Tenant tenant, CancellationToken ct) => _overlays.ForTenantAsync(tenant, ct);
+
+    public async Task<FormMeta?> GetFormAsync(Tenant tenant, string formName, string runtimeName, CancellationToken ct)
+    {
+        var set = await GetOverlaysAsync(tenant, ct).ConfigureAwait(false);
+        var para = runtimeName.Length > formName.Length + 1 ? runtimeName[(formName.Length + 1)..] : null;
+        // Dấu của bộ mô tả nằm trong khóa: lưu mô tả mới trên trang quản trị thì lần mở sau dựng lại form, không chờ hết 5 phút.
+        return await Cached($"form:{tenant.Key}:{runtimeName}:{set.Stamp}", async () =>
         {
             await using var c = await Open(tenant, ct);
+            return await BuildFormAsync(c, tenant, formName, runtimeName, set.Get(formName, para), set.IsHandCoded(formName), ct);
+        });
+    }
+
+    /// <summary>
+    /// Dựng form theo một tệp mô tả CHƯA lưu (nút "Kiểm" của trang quản trị), không dùng / không ghi bộ đệm.
+    /// </summary>
+    internal async Task<FormMeta?> BuildFormAsync(SqlConnection c, Tenant tenant, string formName, string runtimeName,
+        (FrmLstRow Lst, IReadOnlyList<FrmCfgRow> Rows, bool UseDbConfig, IReadOnlyList<FrmFltRow> Filters)? overlay, bool handCoded, CancellationToken ct)
+    {
+        {
             var lst = await c.QuerySingleOrDefaultAsync<FrmLstRow>(Cmd(
                 "SELECT TOP 1 FormID,FormType,CaptionVN,TableName,PrimaryKey,FilterEx,HideColumnArr,SummaryColumnArr,TableDetailLeftJoinField,TableDetailSelectFrom " +
                 "FROM dbo.SY_FrmLstTbl WHERE FormID=@f", formName, ct));
@@ -51,20 +70,19 @@ public sealed class ErpMetadata(ErpConnectionFactory connections, TimeProvider t
                 "SELECT KeyID,SubID,KeyValue,SubValue FROM dbo.SY_FrmCfg WHERE FID=@f AND COALESCE(KeyValue,'')<>'' ORDER BY UserAutoID", runtimeName, ct))).ToList();
             // Form viết tay có tệp mô tả: dùng dòng SY_FrmLstTbl của tệp (lớp viết tay luôn che dòng cùng tên trong DB). Cấu hình
             // SY_FrmCfg của DB chỉ giữ khi form viết tay có đọc nó (useDbConfig), và đứng trước để cấu hình của khách thắng.
-            var para = runtimeName.Length > formName.Length + 1 ? runtimeName[(formName.Length + 1)..] : null;
             // {Mod}: tiền tố bảng theo module của công ty ({Mod}_Menu, {Mod}_UserLog…), thay bằng CHỮ đã kiểm (chỉ chữ cái), không phải
             // tham số, trước khi kiểm chỉ đọc. Mã module sai thì giữ nguyên để câu lỗi và màn báo lỗi cấu hình.
             var mod = TenantNames.IsValidModule(tenant.ModuleId) ? tenant.ModuleId.ToUpperInvariant() : null;
             string? M(string? v) => mod is not null && v is not null && v.Contains("{Mod}", StringComparison.Ordinal) ? v.Replace("{Mod}", mod, StringComparison.Ordinal) : v;
             IReadOnlyList<FrmFltRow> overlayFilters = [];
-            if (FormOverlays.Get(formName, para) is { } overlay)
+            if (overlay is { } o)
             {
-                lst = overlay.Lst;
-                if (!overlay.UseDbConfig) cfg.Clear();
-                cfg.AddRange(overlay.Rows.Select(r => r with { KeyValue = M(r.KeyValue) }));
-                overlayFilters = overlay.Filters.Select(f => f with { Source = M(f.Source), WhereString = M(f.WhereString) }).ToList();
+                lst = o.Lst;
+                if (!o.UseDbConfig) cfg.Clear();
+                cfg.AddRange(o.Rows.Select(r => r with { KeyValue = M(r.KeyValue) }));
+                overlayFilters = o.Filters.Select(f => f with { Source = M(f.Source), WhereString = M(f.WhereString) }).ToList();
             }
-            if (lst is null && cfg.Count == 0) return (FormMeta?)null;
+            if (lst is null && cfg.Count == 0) return null;
             // Tiêu đề riêng của ô trên form (SY_FrmCtrTbl, màn "Ngôn ngữ form" của WinForms): ParentCtlName kết thúc bằng Fld<Cột>,
             // CtlName "C" = nhãn. Bảng có thể không có ở DB khác nên kiểm trước.
             var ctr = new List<FrmCfgRow>();
@@ -101,8 +119,15 @@ public sealed class ErpMetadata(ErpConnectionFactory connections, TimeProvider t
                         S("DisplayMember2"), S("ColumnArr"), S("ParaArr"), S("Caption"), r.TryGetValue("isInvisible", out var inv) && inv is true));
                 }
             }
-            return MetadataCompiler.Compile(formName, runtimeName, lst, [.. cfg, .. ctr], flt) with { Dropdowns = MetadataCompiler.Dropdowns(drdw) };
-        });
+            return MetadataCompiler.Compile(formName, runtimeName, lst, [.. cfg, .. ctr], flt) with
+            {
+                Dropdowns = MetadataCompiler.Dropdowns(drdw),
+                HandCoded = handCoded,
+                HasOverlay = overlay is not null,
+                OverlayUsesDbConfig = overlay is { UseDbConfig: true },
+            };
+        }
+    }
 
     public async Task<FieldFormats> GetFormatsAsync(Tenant tenant, CancellationToken ct) =>
         await Cached($"formats:{tenant.Key}", async () =>
@@ -191,7 +216,11 @@ public sealed class ErpMetadata(ErpConnectionFactory connections, TimeProvider t
         });
 
     /// <summary>Bỏ bộ đệm metadata của một form (sau khi trình vẽ layout lưu cấu hình), để lần mở sau đọc lại DB.</summary>
-    public void Invalidate(Tenant tenant, string runtimeName) => _cache.TryRemove($"form:{tenant.Key}:{runtimeName}", out _);
+    public void Invalidate(Tenant tenant, string runtimeName)
+    {
+        var prefix = $"form:{tenant.Key}:{runtimeName}:";
+        foreach (var k in _cache.Keys.Where(k => k.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))) _cache.TryRemove(k, out _);
+    }
 
     private async Task<T> Cached<T>(string key, Func<Task<T>> load)
     {

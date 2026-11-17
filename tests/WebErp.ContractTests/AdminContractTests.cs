@@ -41,6 +41,11 @@ public sealed class AdminSite : IAsyncLifetime
             ["Key"] = "MINHHUY", ["Name"] = "Công ty thử", ["Module"] = "SY", ["Hosts"] = "minhhuy.bms7.net", ["Enabled"] = "true", ["ConfirmHosts"] = "true",
             ["Connection"] = "Server=sql.example.test,14333;Database=ErpDemo;User ID=u;Password=p", ["Code"] = Code(),
         });
+
+        // Một mô tả form trên web, để có trang sửa / lịch sử / xóa mô tả (ghi thẳng: mã TOTP chỉ cho lệch một bước).
+        new WebErp.Config.ConfigWriter(Factory.Services.GetRequiredService<WebErp.Config.ConfigDatabase>(),
+                Factory.Services.GetRequiredService<WebErp.Config.SecretProtector>(), TimeProvider.System, "test")
+            .SaveFormOverlay("XFrm", null, """{ "form": "XFrm", "formType": "LIST", "caption": "X", "cfg": { "T0": { "TN": "XTbl", "PK": "ID" } } }""", true, "thử", null);
     }
 
     /// <summary>Mã TOTP mỗi lần một bước khác (cửa sổ cho phép lệch +1 bước).</summary>
@@ -95,6 +100,13 @@ public sealed class AdminContractTests(FrontendValidator validator, AdminSite si
     [InlineData("/admin/domains/approve")]
     [InlineData("/admin/settings")]
     [InlineData("/admin/audit")]
+    [InlineData("/admin/forms")]
+    [InlineData("/admin/forms/edit")]
+    [InlineData("/admin/forms/edit?form=UserLogFrm&scope=")]
+    [InlineData("/admin/forms/edit?form=XFrm&scope=")]
+    [InlineData("/admin/forms/history?form=XFrm&scope=")]
+    [InlineData("/admin/forms/delete?form=XFrm&scope=")]
+    [InlineData("/admin/forms/missing")]
     public async Task Admin_page_passes_frontend_validator(string url) => await AssertValid(await site.Get(url));
 
     [Fact]

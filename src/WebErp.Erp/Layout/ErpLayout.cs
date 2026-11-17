@@ -34,7 +34,7 @@ public sealed class ErpLayout(ErpConnectionFactory connections, ErpMetadata meta
     {
         var form = await metadata.GetFormAsync(request.Tenant, request.FormName, request.RuntimeName, ct);
         if (form is null) return new LayoutDesignView(ScreenStatus.NotFound);
-        if (Blocked(request) is { } why) return new LayoutDesignView(ScreenStatus.NotSupported, form.Caption, Note: why);
+        if (Blocked(form) is { } why) return new LayoutDesignView(ScreenStatus.NotSupported, form.Caption, Note: why);
         var perm = await permissions.GetAsync(request.Tenant, request.UserName, request.RuntimeName, ct);
         var formats = await metadata.GetFormatsAsync(request.Tenant, ct);
         return await ReadAsync(request.Tenant, async (c, tx) =>
@@ -118,7 +118,7 @@ public sealed class ErpLayout(ErpConnectionFactory connections, ErpMetadata meta
     {
         var form = await metadata.GetFormAsync(request.Tenant, request.FormName, request.RuntimeName, ct);
         if (form is null) return Fail("Không tìm thấy form.");
-        if (Blocked(request) is { } why) return Fail(why);
+        if (Blocked(form) is { } why) return Fail(why);
         var perm = await permissions.GetAsync(request.Tenant, request.UserName, request.RuntimeName, ct);
         if (!perm.Admin) return Fail("Chỉ người có quyền Admin trên form mới được vẽ layout.");
         var fid = request.RuntimeName;
@@ -216,10 +216,10 @@ public sealed class ErpLayout(ErpConnectionFactory connections, ErpMetadata meta
     }
 
     /// <summary>Form viết tay có bố cục trong tệp mô tả (không đọc SY_FrmCfg): web không vẽ được.</summary>
-    private static string? Blocked(ScreenRequest request) =>
-        FormOverlays.Get(request.FormName, request.Para) is { UseDbConfig: false }
+    private static string? Blocked(FormMeta form) =>
+        form is { HasOverlay: true, OverlayUsesDbConfig: false }
             ? "Form này viết tay, bố cục nằm trong mã chương trình (không đọc cấu hình layout), nên không vẽ được trên web."
-            : HandCodedForms.Names.Contains(request.FormName) && !FormOverlays.Has(request.FormName)
+            : form is { HandCoded: true, HasOverlay: false }
                 ? "Form này viết tay, web chưa hỗ trợ." : null;
 
     private async Task<List<CfgRow>> RowsAsync(SqlConnection c, SqlTransaction tx, string fid, bool forUpdate, CancellationToken ct) =>

@@ -22,7 +22,7 @@ public sealed partial class ErpScreens
     public async Task<LookupView> LookupAsync(ScreenRequest req, string field, string text, IReadOnlyList<string> paras, CancellationToken ct)
     {
         var form = await metadata.GetFormAsync(req.Tenant, req.FormName, req.RuntimeName, ct);
-        if (form?.Master is not { } slot || IsHandCodedWithoutOverlay(req.FormName)) return new LookupView(ScreenStatus.NotSupported);
+        if (form?.Master is not { } slot || IsHandCodedWithoutOverlay(form)) return new LookupView(ScreenStatus.NotSupported);
         var d = form.MasterDropdown(field);
         if (d is null || !d.CanLookup) return new LookupView(ScreenStatus.NotFound);
         var ctx = await ContextAsync(req, form, ct);

@@ -83,7 +83,7 @@ public static class MetadataCompiler
         }
 
         return new FormMeta(formName, runtimeName, formType, lst?.CaptionVN?.Trim() ?? formName, slots, settings,
-            Filters(filters), Layout(cfg), captions);
+            Filters(filters), Layout(cfg), captions) { HandCoded = HandCodedForms.Names.Contains(formName) };
     }
 
     internal static bool IsSlotId(string keyId) => keyId.Length == 2 && FormMeta.SlotIds.Contains(keyId.ToUpperInvariant());
