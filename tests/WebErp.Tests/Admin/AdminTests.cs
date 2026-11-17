@@ -1,4 +1,5 @@
 using System.Net;
+using Microsoft.Extensions.DependencyInjection;
 using WebErp.Tests.Host;
 
 namespace WebErp.Tests.Admin;
@@ -36,6 +37,11 @@ public sealed class AdminTests(AdminFixture f)
             ["Connection"] = "Data Source=sql.example.test,14333;Initial Catalog=ErpDemo;User ID=u;Password=p;Pooling=False;Encrypt=False;TrustServerCertificate=True",
             ["Code"] = "000000", ["__RequestVerificationToken"] = AdminFixture.Token(newPage),
         };
+        // Có domain: phải tích "Tôi hiểu" (web của mọi công ty khởi động lại khi agent sửa IIS). Kiểm trước mã xác thực.
+        var unconfirmed = await HttpAssert.Status(await c.PostAsync("/admin/tenants/new", new FormUrlEncodedContent(form)), HttpStatusCode.UnprocessableEntity);
+        Assert.Contains("khởi động lại khoảng 30 giây", unconfirmed);
+        Assert.Contains("103.232.122.205", unconfirmed);
+        form["ConfirmHosts"] = "true";
         var badCode = await c.PostAsync("/admin/tenants/new", new FormUrlEncodedContent(form));
         Assert.Contains("Mã xác thực không đúng", await HttpAssert.Status(badCode, HttpStatusCode.UnprocessableEntity));
         form["Code"] = f.NextCode();
@@ -99,6 +105,61 @@ public sealed class AdminTests(AdminFixture f)
         Assert.Contains("không đúng", await (await f.LoginAsync(c, "000000")).Content.ReadAsStringAsync());
         Assert.Equal(HttpStatusCode.SeeOther, (await f.LoginAsync(c)).StatusCode);
         await HttpAssert.Status(await c.SendAsync(AdminFixture.Fe(HttpMethod.Get, "/admin/tenants")), HttpStatusCode.OK);
+
+        await DomainsAndDeleteAsync(c);
+    }
+
+    /// <summary>Domain &amp; chứng chỉ (agent HostSync), đổi domain phải xác nhận, xóa công ty.</summary>
+    private async Task DomainsAndDeleteAsync(HttpClient c)
+    {
+        var domains = await c.GetStringAsync("/admin/domains");
+        Assert.Contains("minhhuy.bms7.net", domains);
+        Assert.Contains("Chờ agent", domains);
+        Assert.Contains("chưa chạy lần nào", domains);
+
+        // Thêm domain không tích xác nhận: 422, liệt kê domain thêm và hướng dẫn DNS. Không lưu gì.
+        var edit = await c.GetStringAsync("/admin/tenants/MINHHUY");
+        var save = new Dictionary<string, string>
+        {
+            ["Name"] = "Công ty thử", ["Module"] = "SY", ["Hosts"] = "minhhuy.bms7.net\nmoi.bms7.net", ["Enabled"] = "true",
+            ["__version"] = AdminFixture.Hidden(edit, "__version"), ["__RequestVerificationToken"] = AdminFixture.Token(edit),
+        };
+        var warn = await HttpAssert.Status(await c.PostAsync("/admin/tenants/MINHHUY/save", new FormUrlEncodedContent(save)), HttpStatusCode.UnprocessableEntity);
+        Assert.Contains("Thêm: moi.bms7.net", warn);
+        Assert.DoesNotContain("moi.bms7.net", await c.GetStringAsync("/admin/tenants"));
+        save["ConfirmHosts"] = "true";
+        Assert.Contains("Agent trên VPS", await HttpAssert.Status(await c.PostAsync("/admin/tenants/MINHHUY/save", new FormUrlEncodedContent(save)), HttpStatusCode.OK));
+
+        // Agent đã ghi trạng thái: trang công ty hiện từng domain; Thử lại.
+        var store = f.Factory.Services.GetRequiredService<WebErp.Config.HostSyncStore>();
+        store.Save(new WebErp.Config.ManagedHost("moi.bms7.net", WebErp.Config.HostStates.PendingDns, LastError: "Chưa có bản ghi A trỏ về 103.232.122.205."));
+        store.Heartbeat(1, "abc123", "def456", null);
+        var tenantPage = await c.GetStringAsync("/admin/tenants/MINHHUY");
+        Assert.Contains("Domain trên IIS", tenantPage);
+        Assert.Contains("Chờ DNS · Chưa có bản ghi A", tenantPage);
+        Assert.Contains("Có bản agent mới def456", await c.GetStringAsync("/admin/domains"));
+        var retry = await c.GetStringAsync("/admin/domains/retry?tenant=MINHHUY");
+        Assert.Contains("moi.bms7.net", retry);
+        var retried = await c.PostAsync("/admin/domains/retry?tenant=MINHHUY", new FormUrlEncodedContent(new Dictionary<string, string>
+            { ["Host"] = "moi.bms7.net", ["__RequestVerificationToken"] = AdminFixture.Token(retry) }));
+        Assert.Contains("Sẽ thử lại moi.bms7.net", await HttpAssert.Status(retried, HttpStatusCode.OK));
+        var sync = await c.GetStringAsync("/admin/domains/sync");
+        Assert.Contains("Đã gửi yêu cầu đồng bộ", await HttpAssert.Status(await c.PostAsync("/admin/domains/sync",
+            new FormUrlEncodedContent(new Dictionary<string, string> { ["__RequestVerificationToken"] = AdminFixture.Token(sync) })), HttpStatusCode.OK));
+        Assert.NotNull(store.Meta().RequestedAt);
+
+        // Xóa công ty: hộp thoại ghi rõ domain bị gỡ khỏi IIS; phải gõ lại mã công ty + mã TOTP.
+        var del = await c.GetStringAsync("/admin/tenants/MINHHUY/delete");
+        Assert.Contains("MẤT chứng chỉ: minhhuy.bms7.net, moi.bms7.net", del);
+        Task<HttpResponseMessage> Delete(string confirm, string code) => c.PostAsync("/admin/tenants/MINHHUY/delete", new FormUrlEncodedContent(new Dictionary<string, string>
+            { ["ConfirmKey"] = confirm, ["Code"] = code, ["__RequestVerificationToken"] = AdminFixture.Token(del) }));
+        Assert.Contains("không khớp", await HttpAssert.Status(await Delete("KHAC", f.NextCode()), HttpStatusCode.UnprocessableEntity));
+        Assert.Contains("Mã xác thực", await HttpAssert.Status(await Delete("MINHHUY", "000000"), HttpStatusCode.UnprocessableEntity));
+        Assert.Contains("Đã xóa công ty MINHHUY", await HttpAssert.Status(await Delete("minhhuy", f.NextCode()), HttpStatusCode.OK));
+        Assert.DoesNotContain("minhhuy.bms7.net", await c.GetStringAsync("/admin/tenants"));
+        // Domain agent đang theo dõi hiện "Chờ gỡ" cho tới khi agent gỡ xong.
+        Assert.Contains("Chờ gỡ", await c.GetStringAsync("/admin/domains"));
+        Assert.Contains("Xóa công ty", await c.GetStringAsync("/admin/audit"));
     }
 
     [Fact]

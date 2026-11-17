@@ -38,7 +38,7 @@ public sealed class AdminSite : IAsyncLifetime
         var newPage = await Client.GetStringAsync("/admin/tenants/new");
         await Post("/admin/tenants/new", newPage, new()
         {
-            ["Key"] = "MINHHUY", ["Name"] = "Công ty thử", ["Module"] = "SY", ["Hosts"] = "minhhuy.bms7.net", ["Enabled"] = "true",
+            ["Key"] = "MINHHUY", ["Name"] = "Công ty thử", ["Module"] = "SY", ["Hosts"] = "minhhuy.bms7.net", ["Enabled"] = "true", ["ConfirmHosts"] = "true",
             ["Connection"] = "Server=sql.example.test,14333;Database=ErpDemo;User ID=u;Password=p", ["Code"] = Code(),
         });
     }
@@ -87,6 +87,12 @@ public sealed class AdminContractTests(FrontendValidator validator, AdminSite si
     [InlineData("/admin/tenants/MINHHUY/connection")]
     [InlineData("/admin/tenants/MINHHUY/maintenance")]
     [InlineData("/admin/tenants/MINHHUY/logout-all")]
+    [InlineData("/admin/tenants/MINHHUY/delete")]
+    [InlineData("/admin/domains")]
+    [InlineData("/admin/domains?tenant=MINHHUY")]
+    [InlineData("/admin/domains/sync")]
+    [InlineData("/admin/domains/retry")]
+    [InlineData("/admin/domains/approve")]
     [InlineData("/admin/settings")]
     [InlineData("/admin/audit")]
     public async Task Admin_page_passes_frontend_validator(string url) => await AssertValid(await site.Get(url));

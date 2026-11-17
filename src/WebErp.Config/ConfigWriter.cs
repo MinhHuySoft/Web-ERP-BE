@@ -64,6 +64,29 @@ public sealed class ConfigWriter(ConfigDatabase db, SecretProtector protector, T
         Change("host.remove", key, h, (c, tx, _) => c.Execute("DELETE FROM tenant_host WHERE host = @h AND tenant_key = @key", new { h, key }, tx));
     }
 
+    /// <summary>
+    /// Xóa hẳn công ty (cùng domain và chuỗi kết nối đã mã hóa). Agent đồng bộ IIS sẽ gỡ binding / chứng chỉ của domain không còn
+    /// công ty nào dùng. Trả danh sách domain của công ty lúc xóa.
+    /// </summary>
+    public IReadOnlyList<string> DeleteTenant(string key)
+    {
+        IReadOnlyList<string> hosts = [];
+        Change("tenant.delete", key, null, (c, tx, _) =>
+        {
+            hosts = c.Query<string>("SELECT host FROM tenant_host WHERE tenant_key = @key ORDER BY sort, host", new { key }, tx).ToList();
+            c.Execute("DELETE FROM tenant_host WHERE tenant_key = @key", new { key }, tx);
+            Require(c.Execute("DELETE FROM tenant WHERE tenant_key = @key", new { key }, tx), key);
+        });
+        return hosts;
+    }
+
+    /// <summary>Domain sẽ bị gỡ khỏi IIS nếu bỏ <paramref name="removed"/> khỏi công ty <paramref name="key"/>: không còn công ty khác dùng.</summary>
+    public IReadOnlyList<string> HostsOnlyUsedBy(string key, IEnumerable<string> removed)
+    {
+        using var c = db.OpenReadOnly();
+        return removed.Where(h => c.ExecuteScalar<long>("SELECT COUNT(*) FROM tenant_host WHERE host = @h AND tenant_key <> @key", new { h, key }) == 0).ToList();
+    }
+
     public void SetEnabled(string key, bool enabled) =>
         Change(enabled ? "tenant.enable" : "tenant.disable", key, null, (c, tx, now) =>
             Require(c.Execute("UPDATE tenant SET enabled = @e, updated_at = @now WHERE tenant_key = @key", new { e = enabled ? 1 : 0, now, key }, tx), key));
