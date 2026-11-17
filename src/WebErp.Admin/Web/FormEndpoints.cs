@@ -410,7 +410,12 @@ public static class FormEndpoints
     }
 
     /// <summary>Thông điệp lỗi DB không lộ chi tiết máy chủ: lỗi kết nối / quá giờ đã có thông điệp tiếng Việt; lỗi SQL chỉ nêu mã.</summary>
-    private static string Describe(Exception ex) => ex is Microsoft.Data.SqlClient.SqlException s ? $"lỗi SQL {s.Number}" : ex.Message;
+    private static string Describe(Exception ex) => ex switch
+    {
+        Microsoft.Data.SqlClient.SqlException { Number: -2 } => "quá thời gian chờ (máy chủ SQL đang bận), thử lại sau ít phút",
+        Microsoft.Data.SqlClient.SqlException s => $"lỗi SQL {s.Number}",
+        _ => ex.Message,
+    };
 
     private static IResult NotFound() => HtmlResults.Error(StatusCodes.Status404NotFound, "Không tìm thấy", ErpMessage.Error("Không có mô tả form này."));
 

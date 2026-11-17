@@ -112,11 +112,13 @@ public sealed class OverlayProbe(ErpConnectionFactory connections, ErpMetadata m
         if (await c.ExecuteScalarAsync<int>(new CommandDefinition("SELECT CASE WHEN OBJECT_ID(@t) IS NULL THEN 0 ELSE 1 END", new { t = menu }, cancellationToken: ct)) == 0)
             return none;
         var rows = await c.QueryAsync<(string Form, string? Caption, int HasLst, int HasCfg)>(new CommandDefinition(
-            // Gom menu theo form trước (SQL Server không cho hàm gộp bọc truy vấn con), rồi mới kiểm có cấu hình form không.
-            "SELECT G.FormName, G.VN, " +
-            "CASE WHEN EXISTS (SELECT 1 FROM dbo.SY_FrmLstTbl L WHERE L.FormID = G.FormName) THEN 1 ELSE 0 END, " +
-            "CASE WHEN EXISTS (SELECT 1 FROM dbo.SY_FrmCfg C WHERE C.FID = G.FormName) THEN 1 ELSE 0 END " +
-            $"FROM (SELECT M.FormName, MAX(M.VN) AS VN FROM {menu} M WHERE COALESCE(M.FormName, '') <> '' GROUP BY M.FormName) G ORDER BY G.FormName",
+            // Gom menu theo form, rồi nối với danh sách form CÓ cấu hình (mỗi bảng cấu hình quét một lần). Kiểm EXISTS từng form trên
+            // SY_FrmCfg (bảng lớn, thường không có chỉ mục theo FID) vượt 30 giây trên DB TinPhong lúc máy chủ bận.
+            "SELECT G.FormName, G.VN, CASE WHEN L.FormID IS NULL THEN 0 ELSE 1 END, CASE WHEN C.FID IS NULL THEN 0 ELSE 1 END " +
+            $"FROM (SELECT M.FormName, MAX(M.VN) AS VN FROM {menu} M WHERE COALESCE(M.FormName, '') <> '' GROUP BY M.FormName) G " +
+            "LEFT JOIN (SELECT DISTINCT FormID FROM dbo.SY_FrmLstTbl) L ON L.FormID = G.FormName " +
+            "LEFT JOIN (SELECT DISTINCT FID FROM dbo.SY_FrmCfg) C ON C.FID = G.FormName " +
+            "ORDER BY G.FormName",
             commandTimeout: connections.Options.CommandTimeoutSeconds, cancellationToken: ct));
         var gaps = new List<MenuGap>();
         int reports = 0, commands = 0;
